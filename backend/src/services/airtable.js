@@ -23,23 +23,29 @@ function toDoctor(rec) {
   };
 }
 
+// El campo "sexo" en Airtable usa opciones cortas ("M", "F", "Otro").
+// Mapeamos hacia valores legibles en la app y viceversa.
+const SEXO_TO_APP  = { "M": "Masculino", "F": "Femenino", "Otro": "Otro" };
+const SEXO_TO_AT   = { "Masculino": "M", "Femenino": "F", "Otro": "Otro" };
+
 function toPatient(rec) {
   if (!rec) return null;
   const doctorLinks = rec.get("doctor") || [];
+  const sexoRaw     = rec.get("sexo") || null;
   return {
     id:            rec.id,
-    nombre:        rec.get("nombre")       || "",
-    doctorId:      doctorLinks[0]          || null,
-    edad:          rec.get("edad")         ?? null,
-    sexo:          rec.get("sexo")         || null,
-    telefono:      rec.get("telefono")     || "",
-    email:         rec.get("email")        || "",
-    alergias:      rec.get("alergias")     || "",
-    padecimientos: rec.get("padecimientos")|| "",
-    medicamentos:  rec.get("medicamentos") || "",
-    notas:         rec.get("notas")        || "",
-    ultimoEstudio: rec.get("ultimoEstudio")|| null,
-    createdAt:     rec.get("createdAt")    || null,
+    nombre:        rec.get("nombre")        || "",
+    doctorId:      doctorLinks[0]           || null,
+    edad:          rec.get("edad")          ?? null,
+    sexo:          SEXO_TO_APP[sexoRaw]     || sexoRaw,   // "M" → "Masculino"
+    telefono:      rec.get("telefono")      || "",
+    email:         rec.get("email")         || "",
+    alergias:      rec.get("alergias")      || "",
+    padecimientos: rec.get("padecimientos") || "",
+    medicamentos:  rec.get("medicamentos")  || "",
+    notas:         rec.get("notas")         || "",
+    ultimoEstudio: rec.get("ultimoEstudio") || null,
+    createdAt:     rec.get("createdAt")     || null,
   };
 }
 
@@ -145,7 +151,7 @@ async function createPatient(doctorId, data) {
     doctor: [doctorId],
   };
   if (edad          !== undefined && edad          !== null && edad !== "") fields.edad          = Number(edad);
-  if (sexo          !== undefined && sexo          !== null && sexo !== "") fields.sexo          = sexo;
+  if (sexo          !== undefined && sexo          !== null && sexo !== "") fields.sexo          = SEXO_TO_AT[sexo] || sexo;  // "Masculino" → "M"
   if (telefono      !== undefined && telefono      !== null && telefono !== "") fields.telefono  = telefono;
   if (email         !== undefined && email         !== null && email !== "") fields.email        = email;
   if (alergias      !== undefined && alergias      !== null && alergias !== "") fields.alergias      = alergias;
@@ -167,7 +173,7 @@ async function updatePatient(id, doctorId, data) {
   const fields = {};
   if (nombre        !== undefined) fields.nombre        = nombre;
   if (edad          !== undefined && edad !== null && edad !== "") fields.edad = Number(edad);
-  if (sexo          !== undefined) fields.sexo          = sexo || null;
+  if (sexo          !== undefined) fields.sexo          = SEXO_TO_AT[sexo] || sexo || null;  // "Masculino" → "M"
   if (telefono      !== undefined) fields.telefono      = telefono || "";
   if (email         !== undefined) fields.email         = email || "";
   if (alergias      !== undefined) fields.alergias      = alergias || "";
