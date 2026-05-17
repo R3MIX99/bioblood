@@ -94,7 +94,7 @@ app.get("/health", (_req, res) => res.json({ ok: true }));
 
 app.use("/auth",     require("./routes/auth"));
 app.use("/patients", require("./routes/patients"));
-// app.use("/studies",  require("./routes/studies"));   // Fase 5
+app.use("/studies",  require("./routes/studies"));
 // app.use("/ai",       require("./routes/ai"));        // Fase 5
 
 // ── Error handler ─────────────────────────────────────────────────────────

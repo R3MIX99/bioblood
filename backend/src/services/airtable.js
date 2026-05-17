@@ -203,6 +203,16 @@ async function deletePatient(id, doctorId) {
 
 // ── Estudios ───────────────────────────────────────────────────────────────
 
+async function getStudy(id) {
+  try {
+    const rec = await base(ESTUDIOS).find(id);
+    return toStudy(rec);
+  } catch (e) {
+    console.error("getStudy:", e.message);
+    return null;
+  }
+}
+
 async function listStudies(patientId) {
   try {
     const records = await base(ESTUDIOS)
@@ -260,6 +270,7 @@ module.exports = {
   createPatient,
   updatePatient,
   deletePatient,
+  getStudy,
   listStudies,
   createStudy,
   deleteStudy,
