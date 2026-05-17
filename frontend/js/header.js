@@ -115,8 +115,8 @@ function handleAvatarMenu(e) {
   const doctor = window.__doctor || {};
   menu.innerHTML = `
     <div style="padding: 8px 12px 10px; border-bottom: 1px solid var(--border); margin-bottom: 6px;">
-      <p style="font-weight:600; font-size:13px; color:var(--text); margin:0">${doctor.nombre || ""}</p>
-      <p style="font-size:11px; color:var(--text-light); margin:2px 0 0">${doctor.email || ""}</p>
+      <p style="font-weight:600; font-size:13px; color:var(--text); margin:0; font-family:var(--font-body)">${doctor.nombre || ""}</p>
+      <p style="font-size:11px; color:var(--text-light); margin:2px 0 0; font-family:var(--font-body)">${doctor.email || ""}</p>
     </div>
     <button onclick="doLogout()" style="
       width:100%; display:flex; align-items:center; gap:8px;
