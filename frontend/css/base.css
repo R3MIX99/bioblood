@@ -1,0 +1,122 @@
+/* BioBlood — Base styles */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  color: var(--text);
+  background: var(--bg);
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  line-height: 1.2;
+}
+
+a {
+  color: var(--crimson);
+  text-decoration: none;
+}
+
+img, svg {
+  display: block;
+  max-width: 100%;
+}
+
+button {
+  font-family: var(--font-body);
+  cursor: pointer;
+}
+
+input, textarea, select {
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+}
+
+/* Container */
+.container {
+  max-width: var(--bp-desktop);
+  margin: 0 auto;
+  padding: 0 var(--space-8);
+}
+
+@media (max-width: 600px) {
+  .container {
+    padding: 0 var(--space-4);
+  }
+}
+
+/* Transición global suave */
+@media (prefers-reduced-motion: no-preference) {
+  button,
+  a,
+  .card,
+  .stat-card,
+  .chip {
+    transition:
+      background-color 150ms ease,
+      color 150ms ease,
+      transform 150ms ease,
+      box-shadow 150ms ease;
+  }
+}
+
+/* Lucide icon helper */
+.icon {
+  display: inline-flex;
+  vertical-align: middle;
+  stroke-width: 1.75;
+  flex-shrink: 0;
+}
+.icon-sm { width: 14px; height: 14px; }
+.icon-md { width: 18px; height: 18px; }
+.icon-lg { width: 22px; height: 22px; }
+.icon-xl { width: 40px; height: 40px; }
+
+/* Skeleton loading */
+@keyframes skeleton {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-tint), var(--bg-soft), var(--surface-tint));
+  background-size: 200% 100%;
+  border-radius: var(--radius-md);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton { animation: skeleton 1.4s infinite; }
+}
+
+/* Utilidades de texto */
+.text-muted  { color: var(--text-muted); }
+.text-light  { color: var(--text-light); }
+.text-crimson { color: var(--crimson); }
+.uppercase-label {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--text-light);
+}
+
+/* Spin animation (para loader-2) */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.spin { animation: spin 1s linear infinite; }
