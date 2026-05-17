@@ -93,7 +93,7 @@ app.use(passport.session());
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
 app.use("/auth",     require("./routes/auth"));
-// app.use("/patients", require("./routes/patients"));  // Fase 4
+app.use("/patients", require("./routes/patients"));
 // app.use("/studies",  require("./routes/studies"));   // Fase 5
 // app.use("/ai",       require("./routes/ai"));        // Fase 5
 
