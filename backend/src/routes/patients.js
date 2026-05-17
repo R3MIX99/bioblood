@@ -34,8 +34,9 @@ router.post("/", requireAuth, async (req, res) => {
     if (!patient) return res.status(500).json({ error: "Error al crear paciente" });
     res.status(201).json(patient);
   } catch (err) {
-    console.error("POST /patients:", err);
-    res.status(500).json({ error: "Error al crear paciente" });
+    console.error("POST /patients:", err.message);
+    // Propagar el mensaje real de Airtable para facilitar diagnóstico
+    res.status(500).json({ error: err.message || "Error al crear paciente" });
   }
 });
 
@@ -60,8 +61,8 @@ router.put("/:id", requireAuth, async (req, res) => {
     if (!patient) return res.status(404).json({ error: "Paciente no encontrado" });
     res.json(patient);
   } catch (err) {
-    console.error("PUT /patients/:id:", err);
-    res.status(500).json({ error: "Error al actualizar paciente" });
+    console.error("PUT /patients/:id:", err.message);
+    res.status(500).json({ error: err.message || "Error al actualizar paciente" });
   }
 });
 

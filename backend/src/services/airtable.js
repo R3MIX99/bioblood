@@ -137,53 +137,47 @@ async function getPatient(id, doctorId) {
 }
 
 async function createPatient(doctorId, data) {
-  try {
-    const { nombre, edad, sexo, telefono, email, alergias, padecimientos, medicamentos, notas } = data;
-    const fields = {
-      nombre:        nombre        || "",
-      doctor:        [doctorId],
-      alergias:      alergias      || "",
-      padecimientos: padecimientos || "",
-      medicamentos:  medicamentos  || "",
-      notas:         notas         || "",
-    };
-    if (edad     !== undefined && edad     !== null) fields.edad     = Number(edad);
-    if (sexo)                                        fields.sexo     = sexo;
-    if (telefono)                                    fields.telefono = telefono;
-    if (email)                                       fields.email    = email;
+  const { nombre, edad, sexo, telefono, email, alergias, padecimientos, medicamentos, notas } = data;
 
-    const [rec] = await base(PACIENTES).create([{ fields }]);
-    return toPatient(rec);
-  } catch (e) {
-    console.error("createPatient:", e.message);
-    return null;
-  }
+  // Solo incluir campos que tengan valor real para evitar errores de campo inexistente en Airtable
+  const fields = {
+    nombre: nombre || "",
+    doctor: [doctorId],
+  };
+  if (edad          !== undefined && edad          !== null && edad !== "") fields.edad          = Number(edad);
+  if (sexo          !== undefined && sexo          !== null && sexo !== "") fields.sexo          = sexo;
+  if (telefono      !== undefined && telefono      !== null && telefono !== "") fields.telefono  = telefono;
+  if (email         !== undefined && email         !== null && email !== "") fields.email        = email;
+  if (alergias      !== undefined && alergias      !== null && alergias !== "") fields.alergias      = alergias;
+  if (padecimientos !== undefined && padecimientos !== null && padecimientos !== "") fields.padecimientos = padecimientos;
+  if (medicamentos  !== undefined && medicamentos  !== null && medicamentos !== "") fields.medicamentos  = medicamentos;
+  if (notas         !== undefined && notas         !== null && notas !== "") fields.notas         = notas;
+
+  // Lanzar el error para que la ruta lo capture y lo propague al cliente
+  const [rec] = await base(PACIENTES).create([{ fields }]);
+  return toPatient(rec);
 }
 
 async function updatePatient(id, doctorId, data) {
-  try {
-    // Verificar ownership primero
-    const existing = await getPatient(id, doctorId);
-    if (!existing) return null;
+  // Verificar ownership primero
+  const existing = await getPatient(id, doctorId);
+  if (!existing) return null;
 
-    const { nombre, edad, sexo, telefono, email, alergias, padecimientos, medicamentos, notas } = data;
-    const fields = {};
-    if (nombre        !== undefined) fields.nombre        = nombre;
-    if (edad          !== undefined) fields.edad          = Number(edad);
-    if (sexo          !== undefined) fields.sexo          = sexo;
-    if (telefono      !== undefined) fields.telefono      = telefono;
-    if (email         !== undefined) fields.email         = email;
-    if (alergias      !== undefined) fields.alergias      = alergias;
-    if (padecimientos !== undefined) fields.padecimientos = padecimientos;
-    if (medicamentos  !== undefined) fields.medicamentos  = medicamentos;
-    if (notas         !== undefined) fields.notas         = notas;
+  const { nombre, edad, sexo, telefono, email, alergias, padecimientos, medicamentos, notas } = data;
+  const fields = {};
+  if (nombre        !== undefined) fields.nombre        = nombre;
+  if (edad          !== undefined && edad !== null && edad !== "") fields.edad = Number(edad);
+  if (sexo          !== undefined) fields.sexo          = sexo || null;
+  if (telefono      !== undefined) fields.telefono      = telefono || "";
+  if (email         !== undefined) fields.email         = email || "";
+  if (alergias      !== undefined) fields.alergias      = alergias || "";
+  if (padecimientos !== undefined) fields.padecimientos = padecimientos || "";
+  if (medicamentos  !== undefined) fields.medicamentos  = medicamentos || "";
+  if (notas         !== undefined) fields.notas         = notas || "";
 
-    const [rec] = await base(PACIENTES).update([{ id, fields }]);
-    return toPatient(rec);
-  } catch (e) {
-    console.error("updatePatient:", e.message);
-    return null;
-  }
+  // Lanzar el error para que la ruta lo capture y lo propague
+  const [rec] = await base(PACIENTES).update([{ id, fields }]);
+  return toPatient(rec);
 }
 
 async function deletePatient(id, doctorId) {
