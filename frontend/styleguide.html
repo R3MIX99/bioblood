@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BioBlood — Styleguide</title>
+  <link rel="stylesheet" href="css/tokens.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <style>
+    /* ── Styleguide extras ── */
+    .sg-page {
+      padding: var(--space-8) 0 var(--space-12);
+    }
+    .sg-header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: var(--space-8) 0;
+      margin-bottom: var(--space-8);
+    }
+    .sg-header h1 {
+      font-size: var(--fs-h1);
+      color: var(--crimson);
+      margin-bottom: 4px;
+    }
+    .sg-header p {
+      color: var(--text-light);
+      font-size: var(--fs-sm);
+    }
+    .sg-section {
+      margin-bottom: var(--space-12);
+    }
+    .sg-section-title {
+      font-size: var(--fs-xs);
+      font-weight: 700;
+      letter-spacing: 1.4px;
+      text-transform: uppercase;
+      color: var(--text-light);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: var(--space-3);
+      margin-bottom: var(--space-6);
+    }
+    .sg-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      gap: var(--space-4);
+      margin-bottom: var(--space-5);
+    }
+    .sg-label {
+      font-size: var(--fs-xs);
+      color: var(--text-light);
+      margin-bottom: var(--space-1);
+    }
+    .sg-swatch {
+      width: 56px;
+      height: 56px;
+      border-radius: var(--radius-md);
+      border: 1px solid rgba(0,0,0,0.06);
+    }
+    .sg-token-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+    .sg-token-name {
+      font-size: 10px;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      text-align: center;
+    }
+    .sg-type-row {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+    }
+    .sg-type-item {
+      display: flex;
+      align-items: baseline;
+      gap: var(--space-4);
+    }
+    .sg-type-meta {
+      min-width: 120px;
+      font-size: 10px;
+      font-family: var(--font-mono);
+      color: var(--text-light);
+    }
+    .sg-card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: var(--space-4);
+    }
+    .sg-component-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: var(--space-4);
+    }
+    .sg-nav-preview {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+    .mock-nav {
+      background: var(--surface);
+      border-radius: var(--radius-pill);
+      padding: 8px 12px;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-4);
+    }
+    .sg-shadow-box {
+      background: var(--surface);
+      border-radius: var(--radius-lg);
+      padding: 20px 24px;
+      border: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body data-page="">
+
+<!-- ─────────────────────────────────────────────────────── -->
+<!-- HEADER                                                  -->
+<!-- ─────────────────────────────────────────────────────── -->
+<header class="sg-header">
+  <div class="container">
+    <div style="display:flex; align-items:center; gap:var(--space-3); margin-bottom:var(--space-2)">
+      <div class="nav-logo-icon">
+        <i data-lucide="droplet" class="icon icon-lg" aria-hidden="true"></i>
+      </div>
+      <h1>BioBlood — Styleguide</h1>
+    </div>
+    <p>Referencia visual completa de tokens y componentes del Design System.</p>
+  </div>
+</header>
+
+<div class="sg-page">
+<div class="container">
+
+
+<!-- ══════════════════════════════════════════════════════════
+     1. TOKENS DE COLOR
+     ══════════════════════════════════════════════════════════ -->
+<section class="sg-section">
+  <p class="sg-section-title">1 &mdash; Tokens de color</p>
+
+  <p class="sg-label" style="margin-bottom:var(--space-3)">Crimson (marca)</p>
+  <div class="sg-row">
+    <div class="sg-token-item">
+      <div class="sg-swatch" style="background:var(--crimson-50)"></div>
+      <span class="sg-token-name">--crimson-50</span>
+    </div>
+    <div class="sg-token-item">
+      <div class="sg-swatch" style="background:var(--crimson-100)"></div>
+      <span class="sg-token-name">--crimson-100</span>
+    </div>
+    <div class="sg-token-item">
+      <div class="sg-swatch" style="background:var(--crimson-200)"></div>
+      <span class="sg-token-name">--crimson-200</span>
+    </div>
+    <div class="sg-token-item">
+      <div class="sg-swatch" style="background:var(--crimson-400)"></div>
+      <span class="sg-token-name">--crimson-400</span>
+    </div>
+    <div class="sg-token-item">
+      <div class="sg-swatch" style="background:var(--crimson)"></div>
+      <span class="sg-token-name">--crimson</span>
+    </div>
+    <div class="sg-token-item">
+      <div class="sg-swatch" style="background:var(--crimson-600)"></div>
+      <span class="sg-token-name">--crimson-600</span>
+    </div>
+  </div>
+
+  <p class="sg-label" style="margin-bottom:var(--space-3); margin-top:var(--space-4)">Neutros tibios</p>
+  <div class="sg-row">
+    <div class="sg-token-item">
+      <div class="sg-swatch" style="background:var(--bg)"></div>
+      <span class="sg-token-name">--bg</span>
+    </div>
+    <div class="sg-token-item">
+      <div class="sg-swatch" style="background:var(--bg-soft)"></div>
+      <span class="sg-token-name">--bg-soft</span>
+    </div>
+    <div class="sg-token-item">
+      <div class="sg-swatch" style="background:var(--surface)"></div>
+      <span class="sg-token-name">--surface</span>
+    </div>
+    <div class="sg-token-item">
+      <div class="sg-swatch" style="background:var(--surface-tint)"></div>
+      <span class="sg-token-name">--surface-tint</span>
+    </div>
+    <div class="sg-token-item">
+      <div class="sg-swatch" style="background:var(--border)"></div>
+      <span class="sg-token-name">--border</span>
+    </div>
+    <div class="sg-token-item">
+      <div class="sg-swatch" style="background:var(--border-strong)"></div>
+      <span class="sg-token-name">--border-strong</span>
+    </div>
+  </div>
+
+  <p class="sg-label" style="margin-bottom:var(--space-3); margin-top:var(--space-4)">Texto</p>
+  <div class="sg-row">
+    <div class="sg-token-item">
+      <div class="sg-swatch" style="background:var(--text)"></div>
+      <span class="sg-token-name">--text</span>
+    </div>
+    <div class="sg-token-item">
+      <div class="sg-swatch" style="background:var(--text-muted)"></div>
+      <span class="sg-token-name">--text-muted</span>
+    </div>
+    <div class="sg-token-item">
+      <div class="sg-swatch" style="background:var(--text-light)"></div>
+      <span class="sg-token-name">--text-light</span>
+    </div>
+  </div>
+
+  <p class="sg-label" style="margin-bottom:var(--space-3); margin-top:var(--space-4)">Semánticos</p>
+  <div class="sg-row">
+    <div class="sg-token-item">
+      <div class="sg-swatch" style="background:var(--green)"></div>
+      <span class="sg-token-name">--green</span>
+    </div>
+    <div class="sg-token-item">
+      <div class="sg-swatch" style="background:var(--green-100)"></div>
+      <span class="sg-token-name">--green-100</span>
+    </div>
+    <div class="sg-token-item">
+      <div class="sg-swatch" style="background:var(--amber)"></div>
+      <span class="sg-token-name">--amber</span>
+    </div>
+    <div class="sg-token-item">
+      <div class="sg-swatch" style="background:var(--amber-100)"></div>
+      <span class="sg-token-name">--amber-100</span>
+    </div>
+    <div class="sg-token-item">
+      <div class="sg-swatch" style="background:var(--red)"></div>
+      <span class="sg-token-name">--red</span>
+    </div>
+    <div class="sg-token-item">
+      <div class="sg-swatch" style="background:var(--red-100)"></div>
+      <span class="sg-token-name">--red-100</span>
+    </div>
+    <div class="sg-token-item">
+      <div class="sg-swatch" style="background:var(--blue)"></div>
+      <span class="sg-token-name">--blue</span>
+    </div>
+    <div class="sg-token-item">
+      <div class="sg-swatch" style="background:var(--blue-100)"></div>
+      <span class="sg-token-name">--blue-100</span>
+    </div>
+  </div>
+
+  <p class="sg-label" style="margin-bottom:var(--space-3); margin-top:var(--space-4)">Acentos suaves (stat cards)</p>
+  <div class="sg-row">
+    <div class="sg-token-item">
+      <div class="sg-swatch" style="background:var(--accent-rose)"></div>
+      <span class="sg-token-name">--accent-rose</span>
+    </div>
+    <div class="sg-token-item">
+      <div class="sg-swatch" style="background:var(--accent-peach)"></div>
+      <span class="sg-token-name">--accent-peach</span>
+    </div>
+    <div class="sg-token-item">
+      <div class="sg-swatch" style="background:var(--accent-mint)"></div>
+      <span class="sg-token-name">--accent-mint</span>
+    </div>
+    <div class="sg-token-item">
+      <div class="sg-swatch" style="background:var(--accent-sand)"></div>
+      <span class="sg-token-name">--accent-sand</span>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     2. TIPOGRAFÍA
+     ══════════════════════════════════════════════════════════ -->
+<section class="sg-section">
+  <p class="sg-section-title">2 &mdash; Tipografía</p>
+
+  <div class="sg-type-row">
+    <div class="sg-type-item">
+      <span class="sg-type-meta">--fs-display / 34px</span>
+      <span style="font-family:var(--font-display); font-size:var(--fs-display); color:var(--text)">Resultado de laboratorio</span>
+    </div>
+    <div class="sg-type-item">
+      <span class="sg-type-meta">--fs-h1 / 28px</span>
+      <span style="font-family:var(--font-display); font-size:var(--fs-h1); color:var(--text)">Paciente: Juan García</span>
+    </div>
+    <div class="sg-type-item">
+      <span class="sg-type-meta">--fs-h2 / 20px</span>
+      <span style="font-family:var(--font-display); font-size:var(--fs-h2); color:var(--text)">Historial de estudios</span>
+    </div>
+    <div class="sg-type-item">
+      <span class="sg-type-meta">--fs-h3 / 15px</span>
+      <span style="font-weight:700; font-size:var(--fs-h3); color:var(--text)">Hemoglobina</span>
+    </div>
+    <div class="sg-type-item">
+      <span class="sg-type-meta">--fs-stat / 32px</span>
+      <span style="font-family:var(--font-display); font-size:var(--fs-stat); font-weight:700; color:var(--text)">14.2</span>
+    </div>
+    <div class="sg-type-item">
+      <span class="sg-type-meta">--fs-body / 14px</span>
+      <span style="font-size:var(--fs-body); color:var(--text)">Texto de cuerpo — resultados dentro de rango normal de referencia.</span>
+    </div>
+    <div class="sg-type-item">
+      <span class="sg-type-meta">--fs-sm / 12px</span>
+      <span style="font-size:var(--fs-sm); color:var(--text-muted)">Metadatos secundarios y etiquetas de formulario</span>
+    </div>
+    <div class="sg-type-item">
+      <span class="sg-type-meta">--fs-xs / 11px</span>
+      <span class="uppercase-label">Etiqueta uppercase</span>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     3. ICONOS (Lucide)
+     ══════════════════════════════════════════════════════════ -->
+<section class="sg-section">
+  <p class="sg-section-title">3 &mdash; Iconos (Lucide)</p>
+
+  <div class="sg-row" style="align-items:center">
+    <div class="sg-token-item">
+      <i data-lucide="droplet"         class="icon icon-xl" style="color:var(--crimson)" aria-hidden="true"></i>
+      <span class="sg-token-name">droplet / xl</span>
+    </div>
+    <div class="sg-token-item">
+      <i data-lucide="users"           class="icon icon-lg" style="color:var(--text)" aria-hidden="true"></i>
+      <span class="sg-token-name">users / lg</span>
+    </div>
+    <div class="sg-token-item">
+      <i data-lucide="flask-conical"   class="icon icon-lg" style="color:var(--text)" aria-hidden="true"></i>
+      <span class="sg-token-name">flask-conical / lg</span>
+    </div>
+    <div class="sg-token-item">
+      <i data-lucide="layout-dashboard" class="icon icon-lg" style="color:var(--text)" aria-hidden="true"></i>
+      <span class="sg-token-name">layout-dashboard / lg</span>
+    </div>
+    <div class="sg-token-item">
+      <i data-lucide="settings"        class="icon icon-md" style="color:var(--text-muted)" aria-hidden="true"></i>
+      <span class="sg-token-name">settings / md</span>
+    </div>
+    <div class="sg-token-item">
+      <i data-lucide="bell"            class="icon icon-md" style="color:var(--text-muted)" aria-hidden="true"></i>
+      <span class="sg-token-name">bell / md</span>
+    </div>
+    <div class="sg-token-item">
+      <i data-lucide="upload"          class="icon icon-md" style="color:var(--crimson)" aria-hidden="true"></i>
+      <span class="sg-token-name">upload / md</span>
+    </div>
+    <div class="sg-token-item">
+      <i data-lucide="search"          class="icon icon-md" style="color:var(--text-light)" aria-hidden="true"></i>
+      <span class="sg-token-name">search / md</span>
+    </div>
+    <div class="sg-token-item">
+      <i data-lucide="plus"            class="icon icon-md" style="color:var(--text)" aria-hidden="true"></i>
+      <span class="sg-token-name">plus / md</span>
+    </div>
+    <div class="sg-token-item">
+      <i data-lucide="x"              class="icon icon-sm" style="color:var(--text-muted)" aria-hidden="true"></i>
+      <span class="sg-token-name">x / sm</span>
+    </div>
+    <div class="sg-token-item">
+      <i data-lucide="log-out"         class="icon icon-md" style="color:var(--red)" aria-hidden="true"></i>
+      <span class="sg-token-name">log-out / md</span>
+    </div>
+    <div class="sg-token-item">
+      <i data-lucide="trending-up"     class="icon icon-md" style="color:var(--green)" aria-hidden="true"></i>
+      <span class="sg-token-name">trending-up / md</span>
+    </div>
+    <div class="sg-token-item">
+      <i data-lucide="trending-down"   class="icon icon-md" style="color:var(--red)" aria-hidden="true"></i>
+      <span class="sg-token-name">trending-down / md</span>
+    </div>
+    <div class="sg-token-item">
+      <i data-lucide="loader-2"        class="icon icon-md spin" style="color:var(--crimson)" aria-hidden="true"></i>
+      <span class="sg-token-name">loader-2 (spin)</span>
+    </div>
+    <div class="sg-token-item">
+      <i data-lucide="file-text"       class="icon icon-md" style="color:var(--text-muted)" aria-hidden="true"></i>
+      <span class="sg-token-name">file-text / md</span>
+    </div>
+    <div class="sg-token-item">
+      <i data-lucide="trash-2"         class="icon icon-md" style="color:var(--red)" aria-hidden="true"></i>
+      <span class="sg-token-name">trash-2 / md</span>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     4. TOP NAVIGATION
+     ══════════════════════════════════════════════════════════ -->
+<section class="sg-section">
+  <p class="sg-section-title">4 &mdash; Top Navigation</p>
+
+  <div class="sg-nav-preview" style="background:var(--bg); padding:var(--space-4)">
+    <nav role="navigation" aria-label="Preview navegación">
+      <div class="mock-nav">
+        <!-- Logo -->
+        <a href="#" class="nav-logo" aria-label="BioBlood">
+          <div class="nav-logo-icon">
+            <i data-lucide="droplet" class="icon icon-lg" aria-hidden="true"></i>
+          </div>
+          <span class="nav-brand">BioBlood</span>
+        </a>
+
+        <!-- Tabs -->
+        <div class="nav-tabs" role="tablist">
+          <a href="#" class="nav-tab" aria-current="false">
+            <i data-lucide="layout-dashboard" class="icon icon-md" aria-hidden="true"></i>
+            Dashboard
+          </a>
+          <a href="#" class="nav-tab active" aria-current="page">
+            <i data-lucide="users" class="icon icon-md" aria-hidden="true"></i>
+            Pacientes
+          </a>
+          <a href="#" class="nav-tab" aria-current="false">
+            <i data-lucide="flask-conical" class="icon icon-md" aria-hidden="true"></i>
+            Estudios
+          </a>
+          <a href="#" class="nav-tab" aria-current="false">
+            <i data-lucide="settings" class="icon icon-md" aria-hidden="true"></i>
+            Configuracion
+          </a>
+        </div>
+
+        <!-- Derecha -->
+        <div class="nav-right">
+          <button class="btn-icon" aria-label="Notificaciones">
+            <i data-lucide="bell" class="icon icon-md" aria-hidden="true"></i>
+          </button>
+          <button class="btn-icon" aria-label="Configuracion">
+            <i data-lucide="settings" class="icon icon-md" aria-hidden="true"></i>
+          </button>
+          <button class="nav-avatar" aria-label="Menu de usuario">D</button>
+        </div>
+      </div>
+    </nav>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     5. CARDS
+     ══════════════════════════════════════════════════════════ -->
+<section class="sg-section">
+  <p class="sg-section-title">5 &mdash; Cards</p>
+
+  <div class="sg-card-grid">
+
+    <!-- Card neutra -->
+    <div class="card">
+      <p class="sg-label" style="margin-bottom:var(--space-2)">Card neutra (.card)</p>
+      <p style="font-size:var(--fs-sm); color:var(--text-muted)">Hover para ver elevacion con sombra.</p>
+      <div class="divider" style="margin:var(--space-4) 0"></div>
+      <div class="stats-row">
+        <div class="stat-inline">
+          <span class="label">Pacientes</span>
+          <span class="value">48</span>
+        </div>
+        <div class="stats-divider"></div>
+        <div class="stat-inline">
+          <span class="label">Estudios</span>
+          <span class="value">127</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card protagonista -->
+    <div class="card-featured">
+      <span class="badge-featured">Nuevo estudio</span>
+      <p style="font-size:var(--fs-h2); font-family:var(--font-display); font-weight:700; margin-bottom:var(--space-2)">
+        Sube un PDF de laboratorio
+      </p>
+      <p style="font-size:13px; opacity:0.85; margin-bottom:var(--space-5)">
+        La IA extrae y normaliza todos los valores automaticamente.
+      </p>
+      <button class="btn-primary" style="background:#fff; color:var(--crimson)">
+        <i data-lucide="upload" class="icon icon-md" aria-hidden="true"></i>
+        Subir PDF
+      </button>
+    </div>
+
+    <!-- Card tint rose -->
+    <div class="card-tint card-tint-rose">
+      <p class="sg-label" style="margin-bottom:var(--space-3)">.card-tint-rose</p>
+      <div class="stat-inline" style="text-align:left">
+        <span class="label">Hemoglobina</span>
+        <span class="value" style="color:var(--red)">9.1 <span class="unit">g/dL</span></span>
+      </div>
+    </div>
+
+    <!-- Card tint peach -->
+    <div class="card-tint card-tint-peach">
+      <p class="sg-label" style="margin-bottom:var(--space-3)">.card-tint-peach</p>
+      <div class="stat-inline" style="text-align:left">
+        <span class="label">Glucosa</span>
+        <span class="value" style="color:var(--amber)">118 <span class="unit">mg/dL</span></span>
+      </div>
+    </div>
+
+    <!-- Card tint mint -->
+    <div class="card-tint card-tint-mint">
+      <p class="sg-label" style="margin-bottom:var(--space-3)">.card-tint-mint</p>
+      <div class="stat-inline" style="text-align:left">
+        <span class="label">Leucocitos</span>
+        <span class="value" style="color:var(--green)">6.8 <span class="unit">x10³/µL</span></span>
+      </div>
+    </div>
+
+    <!-- Card tint sand -->
+    <div class="card-tint card-tint-sand">
+      <p class="sg-label" style="margin-bottom:var(--space-3)">.card-tint-sand</p>
+      <div class="stat-inline" style="text-align:left">
+        <span class="label">Colesterol total</span>
+        <span class="value" style="color:#8B6914">198 <span class="unit">mg/dL</span></span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Card lista -->
+  <div style="margin-top:var(--space-4); max-width:400px">
+    <p class="sg-label" style="margin-bottom:var(--space-3)">.card-list (paciente en directorio)</p>
+    <div class="card-list">
+      <div style="width:40px; height:40px; border-radius:50%; background:var(--crimson-100); display:flex; align-items:center; justify-content:center; color:var(--crimson); font-weight:700; font-size:15px; flex-shrink:0">J</div>
+      <div style="flex:1; min-width:0">
+        <div style="font-weight:600; font-size:var(--fs-body); color:var(--text)">Juan Garcia Lopez</div>
+        <div style="font-size:var(--fs-sm); color:var(--text-light)">Ultimo estudio hace 3 dias</div>
+      </div>
+      <i data-lucide="chevron-right" class="icon icon-md" style="color:var(--text-light)" aria-hidden="true"></i>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     6. BOTONES Y CHIPS
+     ══════════════════════════════════════════════════════════ -->
+<section class="sg-section">
+  <p class="sg-section-title">6 &mdash; Botones y chips</p>
+
+  <div class="sg-row" style="align-items:center">
+    <button class="btn-primary">
+      <i data-lucide="plus" class="icon icon-md" aria-hidden="true"></i>
+      Nuevo paciente
+    </button>
+    <button class="btn-primary" disabled>
+      <i data-lucide="loader-2" class="icon icon-md spin" aria-hidden="true"></i>
+      Guardando...
+    </button>
+    <button class="btn-ghost">
+      <i data-lucide="download" class="icon icon-md" aria-hidden="true"></i>
+      Exportar
+    </button>
+    <button class="btn-danger">
+      <i data-lucide="trash-2" class="icon icon-md" aria-hidden="true"></i>
+      Eliminar
+    </button>
+    <button class="btn-icon" aria-label="Buscar">
+      <i data-lucide="search" class="icon icon-md" aria-hidden="true"></i>
+    </button>
+    <button class="btn-icon" aria-label="Cerrar">
+      <i data-lucide="x" class="icon icon-md" aria-hidden="true"></i>
+    </button>
+  </div>
+
+  <div class="sg-row" style="margin-top:var(--space-3)">
+    <button class="chip active">Todos</button>
+    <button class="chip">Normal</button>
+    <button class="chip">Bajo</button>
+    <button class="chip">Alto</button>
+    <button class="chip">
+      <i data-lucide="filter" class="icon icon-sm" aria-hidden="true"></i>
+      Filtros
+    </button>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     7. SEARCH BAR
+     ══════════════════════════════════════════════════════════ -->
+<section class="sg-section">
+  <p class="sg-section-title">7 &mdash; Search bar</p>
+
+  <div class="search-wrapper" style="max-width:400px">
+    <i data-lucide="search" class="icon icon-md search-icon" aria-hidden="true"></i>
+    <input class="search-bar" type="search" placeholder="Buscar paciente..." aria-label="Buscar paciente" />
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     8. BADGES DE ESTADO
+     ══════════════════════════════════════════════════════════ -->
+<section class="sg-section">
+  <p class="sg-section-title">8 &mdash; Badges de estado</p>
+
+  <div class="sg-row" style="align-items:center">
+    <span class="badge-status normal">Normal</span>
+    <span class="badge-status bajo">Bajo</span>
+    <span class="badge-status alto">Alto</span>
+    <span class="badge-status nd">N/D</span>
+    <span class="badge-status desconocido">Desconocido</span>
+  </div>
+
+  <p class="sg-label" style="margin-top:var(--space-4); margin-bottom:var(--space-2)">Badge contador</p>
+  <div class="sg-row">
+    <span class="badge-count">48 pacientes</span>
+    <span class="badge-count">3 alterados</span>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     9. STATS INLINE
+     ══════════════════════════════════════════════════════════ -->
+<section class="sg-section">
+  <p class="sg-section-title">9 &mdash; Stats inline</p>
+
+  <div class="card" style="max-width:500px">
+    <div class="stats-row">
+      <div class="stat-inline">
+        <span class="label">Hemoglobina</span>
+        <span class="value">14.2<span class="unit">g/dL</span></span>
+      </div>
+      <div class="stats-divider"></div>
+      <div class="stat-inline">
+        <span class="label">Plaquetas</span>
+        <span class="value">230<span class="unit">x10³</span></span>
+      </div>
+      <div class="stats-divider"></div>
+      <div class="stat-inline">
+        <span class="label">Glucosa</span>
+        <span class="value">98<span class="unit">mg/dL</span></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     10. TABLA PIVOT
+     ══════════════════════════════════════════════════════════ -->
+<section class="sg-section">
+  <p class="sg-section-title">10 &mdash; Tabla pivot</p>
+
+  <div class="card" style="padding:0">
+    <div class="table-header">
+      <div>
+        <h3 style="font-size:var(--fs-h3); font-weight:700; color:var(--text)">Resultados comparativos</h3>
+        <p style="font-size:var(--fs-sm); color:var(--text-light); margin-top:2px">3 estudios — 5 componentes</p>
+      </div>
+      <button class="btn-ghost">
+        <i data-lucide="download" class="icon icon-md" aria-hidden="true"></i>
+        Exportar
+      </button>
+    </div>
+    <div class="table-container">
+      <table class="pivot-table">
+        <thead>
+          <tr>
+            <th colspan="1">Componente</th>
+            <th colspan="3">Estudios</th>
+            <th>Rango ref.</th>
+          </tr>
+          <tr>
+            <th>NOMBRE</th>
+            <th>15 ENE 2025</th>
+            <th>01 MAR 2025</th>
+            <th>10 MAY 2025</th>
+            <th>REFERENCIA</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="row-status-normal">
+            <td>Hemoglobina</td>
+            <td>13.8</td>
+            <td>14.1</td>
+            <td>14.2</td>
+            <td>12 – 16 g/dL</td>
+          </tr>
+          <tr class="row-status-low">
+            <td>Hematocrito</td>
+            <td>34%</td>
+            <td>36%</td>
+            <td>35%</td>
+            <td>37 – 47%</td>
+          </tr>
+          <tr class="row-status-high">
+            <td>Glucosa</td>
+            <td>124</td>
+            <td>118</td>
+            <td>131</td>
+            <td>70 – 100 mg/dL</td>
+          </tr>
+          <tr>
+            <td>Plaquetas</td>
+            <td>210</td>
+            <td>225</td>
+            <td>230</td>
+            <td>150 – 400 x10³</td>
+          </tr>
+          <tr class="row-status-normal">
+            <td>Leucocitos</td>
+            <td>6.2</td>
+            <td>6.5</td>
+            <td>6.8</td>
+            <td>4.5 – 11 x10³/µL</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     11. MODAL
+     ══════════════════════════════════════════════════════════ -->
+<section class="sg-section">
+  <p class="sg-section-title">11 &mdash; Modal</p>
+
+  <button class="btn-primary" onclick="document.getElementById('sg-modal').style.display='flex'">
+    <i data-lucide="plus" class="icon icon-md" aria-hidden="true"></i>
+    Abrir modal
+  </button>
+
+  <div id="sg-modal" class="modal-overlay" style="display:none" role="dialog" aria-modal="true" aria-labelledby="sg-modal-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <h2 id="sg-modal-title" style="font-size:var(--fs-h2); font-family:var(--font-display); color:var(--text)">
+            Nuevo paciente
+          </h2>
+          <p style="font-size:var(--fs-sm); color:var(--text-light); margin-top:4px">Completa los datos del paciente.</p>
+        </div>
+        <button class="btn-icon" aria-label="Cerrar" onclick="document.getElementById('sg-modal').style.display='none'">
+          <i data-lucide="x" class="icon icon-md" aria-hidden="true"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-field">
+          <label class="form-label" for="sg-nombre">Nombre completo</label>
+          <input id="sg-nombre" class="form-input" type="text" placeholder="Ej. Maria Lopez Ruiz" />
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="sg-email">Correo electronico</label>
+          <input id="sg-email" class="form-input" type="email" placeholder="paciente@email.com" />
+        </div>
+        <div class="form-field" style="margin-bottom:0">
+          <label class="form-label" for="sg-notas">Notas clinicas</label>
+          <textarea id="sg-notas" class="form-textarea" placeholder="Antecedentes relevantes..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" onclick="document.getElementById('sg-modal').style.display='none'">Cancelar</button>
+        <button class="btn-primary">Guardar paciente</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     12. FORMULARIOS
+     ══════════════════════════════════════════════════════════ -->
+<section class="sg-section">
+  <p class="sg-section-title">12 &mdash; Formularios</p>
+
+  <div style="max-width:420px; display:flex; flex-direction:column; gap:0">
+    <div class="form-field">
+      <label class="form-label" for="sg-f1">Campo de texto</label>
+      <input id="sg-f1" class="form-input" type="text" placeholder="Placeholder..." />
+    </div>
+    <div class="form-field">
+      <label class="form-label" for="sg-f2">Correo</label>
+      <input id="sg-f2" class="form-input" type="email" placeholder="doctor@hospital.com" />
+    </div>
+    <div class="form-field">
+      <label class="form-label" for="sg-f3">Select</label>
+      <select id="sg-f3" class="form-select">
+        <option>Selecciona...</option>
+        <option>Masculino</option>
+        <option>Femenino</option>
+        <option>Otro</option>
+      </select>
+    </div>
+    <div class="form-field" style="margin-bottom:0">
+      <label class="form-label" for="sg-f4">Notas</label>
+      <textarea id="sg-f4" class="form-textarea" placeholder="Escribe aqui..."></textarea>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     13. DROPZONE
+     ══════════════════════════════════════════════════════════ -->
+<section class="sg-section">
+  <p class="sg-section-title">13 &mdash; Dropzone</p>
+
+  <div class="dropzone" style="max-width:480px">
+    <div class="dropzone-icon">
+      <i data-lucide="upload" class="icon" style="width:48px; height:48px; stroke-width:1.5" aria-hidden="true"></i>
+    </div>
+    <p class="dropzone-title">Arrastra tu PDF aqui</p>
+    <p class="dropzone-sub">o haz clic para seleccionar — PDF, max. 20 MB</p>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     14. COMPONENT CARDS + SERVICE ICONS
+     ══════════════════════════════════════════════════════════ -->
+<section class="sg-section">
+  <p class="sg-section-title">14 &mdash; Component cards + service icons</p>
+
+  <div class="sg-component-grid">
+    <div class="component-card">
+      <div style="display:flex; align-items:center; gap:var(--space-3); margin-bottom:var(--space-3)">
+        <div class="service-icon service-icon-rose">
+          <i data-lucide="droplet" class="icon icon-md" aria-hidden="true"></i>
+        </div>
+        <p class="component-card-name">Hemoglobina</p>
+      </div>
+      <p class="component-card-value" style="color:var(--red)">9.1<span class="unit">g/dL</span></p>
+      <div class="component-progress">
+        <div class="component-progress-fill" style="width:40%; background:var(--red)"></div>
+      </div>
+      <div class="component-card-footer" style="margin-top:var(--space-2)">
+        <span class="badge-status alto">Alto</span>
+        <span class="component-card-link">Ver detalle</span>
+      </div>
+    </div>
+
+    <div class="component-card">
+      <div style="display:flex; align-items:center; gap:var(--space-3); margin-bottom:var(--space-3)">
+        <div class="service-icon service-icon-peach">
+          <i data-lucide="activity" class="icon icon-md" aria-hidden="true"></i>
+        </div>
+        <p class="component-card-name">Glucosa</p>
+      </div>
+      <p class="component-card-value" style="color:var(--amber)">118<span class="unit">mg/dL</span></p>
+      <div class="component-progress">
+        <div class="component-progress-fill" style="width:65%; background:var(--amber)"></div>
+      </div>
+      <div class="component-card-footer" style="margin-top:var(--space-2)">
+        <span class="badge-status bajo">Bajo</span>
+        <span class="component-card-link">Ver detalle</span>
+      </div>
+    </div>
+
+    <div class="component-card">
+      <div style="display:flex; align-items:center; gap:var(--space-3); margin-bottom:var(--space-3)">
+        <div class="service-icon service-icon-mint">
+          <i data-lucide="shield-check" class="icon icon-md" aria-hidden="true"></i>
+        </div>
+        <p class="component-card-name">Leucocitos</p>
+      </div>
+      <p class="component-card-value" style="color:var(--green)">6.8<span class="unit">x10³/µL</span></p>
+      <div class="component-progress">
+        <div class="component-progress-fill" style="width:60%; background:var(--green)"></div>
+      </div>
+      <div class="component-card-footer" style="margin-top:var(--space-2)">
+        <span class="badge-status normal">Normal</span>
+        <span class="component-card-link">Ver detalle</span>
+      </div>
+    </div>
+
+    <div class="component-card">
+      <div style="display:flex; align-items:center; gap:var(--space-3); margin-bottom:var(--space-3)">
+        <div class="service-icon service-icon-sand">
+          <i data-lucide="flask-conical" class="icon icon-md" aria-hidden="true"></i>
+        </div>
+        <p class="component-card-name">Colesterol total</p>
+      </div>
+      <p class="component-card-value" style="color:#8B6914">198<span class="unit">mg/dL</span></p>
+      <div class="component-progress">
+        <div class="component-progress-fill" style="width:50%; background:var(--amber)"></div>
+      </div>
+      <div class="component-card-footer" style="margin-top:var(--space-2)">
+        <span class="badge-status normal">Normal</span>
+        <span class="component-card-link">Ver detalle</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     15. SKELETON LOADING
+     ══════════════════════════════════════════════════════════ -->
+<section class="sg-section">
+  <p class="sg-section-title">15 &mdash; Skeleton loading</p>
+
+  <div class="card" style="max-width:480px; display:flex; flex-direction:column; gap:var(--space-4)">
+    <div class="skeleton skeleton-card"></div>
+    <div class="skeleton skeleton-title" style="width:55%"></div>
+    <div class="skeleton skeleton-text" style="width:85%"></div>
+    <div class="skeleton skeleton-text" style="width:70%"></div>
+    <div class="skeleton skeleton-row"></div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     16. ALERTAS
+     ══════════════════════════════════════════════════════════ -->
+<section class="sg-section">
+  <p class="sg-section-title">16 &mdash; Alertas</p>
+
+  <div style="display:flex; flex-direction:column; gap:var(--space-3); max-width:520px">
+    <div class="alert alert-error" role="alert">
+      <i data-lucide="alert-circle" class="icon icon-md" aria-hidden="true"></i>
+      <span>Credenciales invalidas. Revisa tu correo y contrasena.</span>
+      <button class="alert-close" aria-label="Cerrar">
+        <i data-lucide="x" class="icon icon-sm" aria-hidden="true"></i>
+      </button>
+    </div>
+    <div class="alert alert-warning" role="alert">
+      <i data-lucide="alert-triangle" class="icon icon-md" aria-hidden="true"></i>
+      <span>El PDF no contiene todos los campos esperados.</span>
+    </div>
+    <div class="alert alert-success" role="alert">
+      <i data-lucide="check-circle" class="icon icon-md" aria-hidden="true"></i>
+      <span>Estudio subido y procesado correctamente.</span>
+    </div>
+    <div class="alert alert-info" role="alert">
+      <i data-lucide="info" class="icon icon-md" aria-hidden="true"></i>
+      <span>Google OAuth no esta configurado en este entorno.</span>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     17. EMPTY STATE
+     ══════════════════════════════════════════════════════════ -->
+<section class="sg-section">
+  <p class="sg-section-title">17 &mdash; Empty state</p>
+
+  <div class="card">
+    <div class="empty-state">
+      <div class="empty-state-icon">
+        <i data-lucide="users" class="icon" style="width:56px; height:56px; stroke-width:1.5; color:var(--crimson-200)" aria-hidden="true"></i>
+      </div>
+      <h2>Sin pacientes aun</h2>
+      <p>Agrega tu primer paciente para empezar a registrar estudios de laboratorio.</p>
+      <button class="btn-primary">
+        <i data-lucide="plus" class="icon icon-md" aria-hidden="true"></i>
+        Agregar paciente
+      </button>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     18. PROGRESS BAR + TOASTS
+     ══════════════════════════════════════════════════════════ -->
+<section class="sg-section">
+  <p class="sg-section-title">18 &mdash; Progress bar + Toasts</p>
+
+  <div style="display:flex; flex-direction:column; gap:var(--space-4); max-width:400px">
+    <div>
+      <p class="sg-label" style="margin-bottom:var(--space-2)">Progress bar (subida PDF)</p>
+      <div class="progress-bar-track" style="margin:0">
+        <div class="progress-bar-fill" style="width:65%"></div>
+      </div>
+    </div>
+
+    <div>
+      <p class="sg-label" style="margin-bottom:var(--space-2)">Toasts (preview estatico)</p>
+      <div style="display:flex; flex-direction:column; gap:var(--space-2)">
+        <div class="toast">Paciente actualizado.</div>
+        <div class="toast success">Estudio procesado correctamente.</div>
+        <div class="toast error">Error al guardar. Intenta de nuevo.</div>
+        <div class="toast warning">El PDF esta incompleto.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     19. SOMBRAS
+     ══════════════════════════════════════════════════════════ -->
+<section class="sg-section">
+  <p class="sg-section-title">19 &mdash; Sombras</p>
+
+  <div class="sg-row">
+    <div class="sg-token-item">
+      <div class="sg-shadow-box" style="box-shadow:var(--shadow-xs)">
+        <span style="font-size:var(--fs-xs); color:var(--text-muted)">--shadow-xs</span>
+      </div>
+    </div>
+    <div class="sg-token-item">
+      <div class="sg-shadow-box" style="box-shadow:var(--shadow-sm)">
+        <span style="font-size:var(--fs-xs); color:var(--text-muted)">--shadow-sm</span>
+      </div>
+    </div>
+    <div class="sg-token-item">
+      <div class="sg-shadow-box" style="box-shadow:var(--shadow-md)">
+        <span style="font-size:var(--fs-xs); color:var(--text-muted)">--shadow-md</span>
+      </div>
+    </div>
+    <div class="sg-token-item">
+      <div class="sg-shadow-box" style="box-shadow:var(--shadow-lg)">
+        <span style="font-size:var(--fs-xs); color:var(--text-muted)">--shadow-lg</span>
+      </div>
+    </div>
+    <div class="sg-token-item">
+      <div class="sg-shadow-box" style="box-shadow:var(--shadow-crimson); background:var(--crimson-50)">
+        <span style="font-size:var(--fs-xs); color:var(--crimson)">--shadow-crimson</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+</div><!-- /container -->
+</div><!-- /sg-page -->
+
+<!-- Toast container (para la pagina) -->
+<div id="toast-container"></div>
+
+<script src="https://unpkg.com/lucide@latest"></script>
+<script>lucide.createIcons();</script>
+
+<!-- Cerrar modal al hacer clic en el overlay -->
+<script>
+  document.getElementById('sg-modal').addEventListener('click', function(e) {
+    if (e.target === this) this.style.display = 'none';
+  });
+</script>
+
+</body>
+</html>

@@ -1,16 +1,9 @@
 /* BioBlood — Base styles */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-*, *::before, *::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-html {
-  font-size: 16px;
-  -webkit-font-smoothing: antialiased;
-}
+html { font-size: 16px; -webkit-font-smoothing: antialiased; }
 
 body {
   font-family: var(--font-body);
@@ -21,62 +14,50 @@ body {
   min-height: 100vh;
 }
 
-h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-display);
-  line-height: 1.2;
-}
+h1, h2, h3, h4, h5, h6 { font-family: var(--font-display); line-height: 1.2; }
 
-a {
-  color: var(--crimson);
-  text-decoration: none;
-}
+a { color: var(--crimson); text-decoration: none; }
+a:hover { text-decoration: underline; }
 
-img, svg {
-  display: block;
-  max-width: 100%;
-}
+img, svg { display: block; max-width: 100%; }
 
-button {
-  font-family: var(--font-body);
-  cursor: pointer;
-}
+button { font-family: var(--font-body); cursor: pointer; }
 
 input, textarea, select {
   font-family: var(--font-body);
   font-size: var(--fs-body);
 }
 
-/* Container */
+/* ── Container ── */
 .container {
-  max-width: var(--bp-desktop);
+  max-width: 1200px;
   margin: 0 auto;
   padding: 0 var(--space-8);
 }
 
 @media (max-width: 600px) {
-  .container {
-    padding: 0 var(--space-4);
-  }
+  .container { padding: 0 var(--space-4); }
 }
 
-/* Transición global suave */
+/* ── Transición global suave (respeta prefers-reduced-motion) ── */
 @media (prefers-reduced-motion: no-preference) {
-  button,
-  a,
-  .card,
-  .stat-card,
-  .chip {
+  button, a, .card, .card-tint, .card-list,
+  .chip, .btn-primary, .btn-ghost, .btn-icon,
+  .component-card, .dropzone {
     transition:
       background-color 150ms ease,
       color 150ms ease,
+      border-color 150ms ease,
       transform 150ms ease,
       box-shadow 150ms ease;
   }
 }
 
-/* Lucide icon helper */
+/* ── Lucide icons ── */
 .icon {
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
   vertical-align: middle;
   stroke-width: 1.75;
   flex-shrink: 0;
@@ -86,26 +67,29 @@ input, textarea, select {
 .icon-lg { width: 22px; height: 22px; }
 .icon-xl { width: 40px; height: 40px; }
 
-/* Skeleton loading */
+/* ── Animations ── */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
 @keyframes skeleton {
   0%   { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
-
-.skeleton {
-  background: linear-gradient(90deg, var(--surface-tint), var(--bg-soft), var(--surface-tint));
-  background-size: 200% 100%;
-  border-radius: var(--radius-md);
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .skeleton { animation: skeleton 1.4s infinite; }
+  .spin { animation: spin 1s linear infinite; }
 }
 
-/* Utilidades de texto */
-.text-muted  { color: var(--text-muted); }
-.text-light  { color: var(--text-light); }
-.text-crimson { color: var(--crimson); }
+/* ── Utilidades ── */
 .uppercase-label {
   font-size: var(--fs-xs);
   font-weight: 600;
@@ -114,9 +98,14 @@ input, textarea, select {
   color: var(--text-light);
 }
 
-/* Spin animation (para loader-2) */
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+.text-crimson { color: var(--crimson); }
+.text-muted   { color: var(--text-muted); }
+.text-light   { color: var(--text-light); }
+.text-green   { color: var(--green); }
+.text-amber   { color: var(--amber); }
+.text-red     { color: var(--red); }
+
+/* ── Page wrapper (debajo del header flotante) ── */
+.page-body {
+  padding: var(--space-8) 0;
 }
-.spin { animation: spin 1s linear infinite; }

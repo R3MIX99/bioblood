@@ -1,4 +1,4 @@
-/* BioBlood — Design Tokens (sección 2–5 del Design System) */
+/* BioBlood — Design Tokens (secciones 2–5 del Design System) */
 :root {
   /* ── Crimson — color de marca ── */
   --crimson:        #C0392B;
@@ -29,8 +29,10 @@
   --amber-100:      #FEF9E7;
   --red:            #C0392B;
   --red-100:        #FADBD8;
+  --blue:           #1565C0;
+  --blue-100:       #E3F2FD;
 
-  /* ── Acentos suaves (stat cards) ── */
+  /* ── Acentos suaves stat cards ── */
   --accent-rose:    #FCE4E4;
   --accent-peach:   #FCEAD9;
   --accent-mint:    #E6F4ED;
@@ -62,11 +64,11 @@
   --space-12: 48px;
 
   /* ── Radios ── */
-  --radius-sm:  8px;
-  --radius-md:  12px;
-  --radius-lg:  16px;
-  --radius-xl:  20px;
-  --radius-2xl: 24px;
+  --radius-sm:   8px;
+  --radius-md:   12px;
+  --radius-lg:   16px;
+  --radius-xl:   20px;
+  --radius-2xl:  24px;
   --radius-pill: 999px;
 
   /* ── Sombras ── */
@@ -75,9 +77,4 @@
   --shadow-md:      0 8px 20px rgba(44, 24, 16, 0.08);
   --shadow-lg:      0 24px 48px rgba(44, 24, 16, 0.12);
   --shadow-crimson: 0 8px 24px rgba(192, 57, 43, 0.18);
-
-  /* ── Breakpoints (como custom props, para referencia en JS) ── */
-  --bp-mobile:  600px;
-  --bp-tablet:  900px;
-  --bp-desktop: 1200px;
 }
