@@ -3,7 +3,7 @@
 const router = require("express").Router();
 const { requireAuth } = require("../middleware/auth");
 const {
-  listPatients,
+  listPatientsByDoctor,
   getPatient,
   createPatient,
   updatePatient,
@@ -14,7 +14,7 @@ const {
 // Lista todos los pacientes del doctor autenticado.
 router.get("/", requireAuth, async (req, res) => {
   try {
-    const patients = await listPatients(req.doctor.id);
+    const patients = await listPatientsByDoctor(req.doctor.id);
     res.json(patients);
   } catch (err) {
     console.error("GET /patients:", err);

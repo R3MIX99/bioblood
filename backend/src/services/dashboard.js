@@ -117,8 +117,12 @@ async function getRecentStudies(doctorId, limit = 5) {
 // ── getAlerts ─────────────────────────────────────────────────────────────────
 
 async function getAlerts(doctorId, limit = 10) {
-  const fromISO = isoNDaysAgo(90);
-  const studies = await listStudiesByDoctor(doctorId, { fromISO });
+  const fromISO  = isoNDaysAgo(90);
+  const allStudies = await listStudiesByDoctor(doctorId, {});
+  const studies = allStudies.filter(s => {
+    const d = s.uploadedAt || s.fecha;
+    return d && d >= fromISO;
+  });
 
   const alerts = [];
   for (const study of studies) {
@@ -156,8 +160,12 @@ async function getAlerts(doctorId, limit = 10) {
 
 async function getTopComponents(doctorId, days = 30, limit = 6) {
   return withCache(`top-components:${doctorId}:${days}:${limit}`, TTL, async () => {
-    const fromISO = isoNDaysAgo(days);
-    const studies = await listStudiesByDoctor(doctorId, { fromISO });
+    const fromISO  = isoNDaysAgo(days);
+    const allStudies = await listStudiesByDoctor(doctorId, {});
+    const studies = allStudies.filter(s => {
+      const d = s.uploadedAt || s.fecha;
+      return d && d >= fromISO;
+    });
 
     const compMap = new Map(); // normalizado → acumulador
 

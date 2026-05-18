@@ -52,7 +52,7 @@ function toPatient(rec) {
     medicamentos:  rec.get("medicamentos")  || "",
     notas:         rec.get("notas")         || "",
     ultimoEstudio: rec.get("ultimoEstudio") || null,
-    createdAt:     rec.get("createdAt")     || null,
+    createdAt:     rec._rawJson?.createdTime ? rec._rawJson.createdTime.slice(0, 10) : null,
   };
 }
 
@@ -329,19 +329,37 @@ async function countStudiesByDoctorInRange(doctorId, fromISO, toISO) {
   return studies.length;
 }
 
-/** Lista pacientes del doctor con ordenamiento y paginación. */
+/** Lista pacientes del doctor con ordenamiento, paginación y ultimoEstudio calculado. */
 async function listPatientsByDoctor(doctorId, { limit, sort = "-createdAt" } = {}) {
   try {
-    const patients = await listPatients(doctorId);
+    const [patients, studies] = await Promise.all([
+      listPatients(doctorId),
+      listStudiesByDoctor(doctorId, {}),
+    ]);
+
+    // Calcular última fecha de estudio por paciente
+    const ultimoMap = new Map();
+    for (const s of studies) {
+      if (!s.patientId) continue;
+      const date = s.fecha;
+      const cur  = ultimoMap.get(s.patientId);
+      if (date && (!cur || date > cur)) ultimoMap.set(s.patientId, date);
+    }
+
+    const enriched = patients.map(p => ({
+      ...p,
+      ultimoEstudio: ultimoMap.get(p.id) ?? p.ultimoEstudio ?? null,
+    }));
+
     if (sort === "-createdAt") {
-      patients.sort((a, b) => {
+      enriched.sort((a, b) => {
         if (!a.createdAt && !b.createdAt) return 0;
         if (!a.createdAt) return 1;
         if (!b.createdAt) return -1;
         return b.createdAt.localeCompare(a.createdAt);
       });
     }
-    return limit ? patients.slice(0, limit) : patients;
+    return limit ? enriched.slice(0, limit) : enriched;
   } catch (e) {
     console.error("listPatientsByDoctor:", e.message);
     return [];
