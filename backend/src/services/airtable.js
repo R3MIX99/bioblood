@@ -63,6 +63,7 @@ function toStudy(rec) {
   try { components = JSON.parse(rec.get("componentsJSON") || "[]"); } catch (_) {}
   const rawPaciente = pacienteLinks[0];
   const patientId   = typeof rawPaciente === "string" ? rawPaciente : (rawPaciente?.id || null);
+  const rawCreated = rec._rawJson?.createdTime;
   return {
     id:         rec.id,
     filename:   rec.get("filename")  || "",
@@ -72,6 +73,7 @@ function toStudy(rec) {
     components,
     pdf:        rec.get("pdf")       || [],
     createdAt:  rec.get("createdAt") || null,
+    uploadedAt: rawCreated ? rawCreated.slice(0, 10) : null,
   };
 }
 

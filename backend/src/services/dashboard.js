@@ -46,8 +46,8 @@ async function getStats(doctorId) {
       listStudiesByDoctor(doctorId, {}),
     ]);
 
-    const studiesThisMonth = allStudies.filter(s => s.fecha && s.fecha >= firstOfMonth).length;
-    const studiesLast30d   = allStudies.filter(s => s.fecha && s.fecha >= thirtyAgo).length;
+    const studiesThisMonth = allStudies.filter(s => s.uploadedAt && s.uploadedAt >= firstOfMonth).length;
+    const studiesLast30d   = allStudies.filter(s => s.uploadedAt && s.uploadedAt >= thirtyAgo).length;
 
     // Último estudio por paciente → detectar alertas
     const latestByPatient = new Map();
@@ -92,8 +92,9 @@ async function getActivity(doctorId, months = 12) {
     }
 
     for (const s of studies) {
-      if (!s.fecha) continue;
-      const key = s.fecha.slice(0, 7);
+      const dateKey = s.uploadedAt || s.fecha;
+      if (!dateKey) continue;
+      const key = dateKey.slice(0, 7);
       if (monthMap.has(key)) monthMap.set(key, monthMap.get(key) + 1);
     }
 
