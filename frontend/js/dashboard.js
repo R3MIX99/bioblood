@@ -224,7 +224,7 @@ function renderRecentPatients(data) {
   el.innerHTML = data.map(p => {
     const initial = (p.nombre || "?")[0].toUpperCase();
     const sexoLabel = p.sexo === "M" || p.sexo === "Masculino" ? "Masculino" : p.sexo === "F" || p.sexo === "Femenino" ? "Femenino" : "";
-    const meta = [p.edad ? `${p.edad} anos` : "", sexoLabel].filter(Boolean).join(" · ");
+    const meta = [p.edad ? `${p.edad} años` : "", sexoLabel].filter(Boolean).join(" · ");
     return `
       <a href="/paciente?id=${p.id}" class="db-list-item" style="text-decoration:none">
         <div class="db-list-avatar">${initial}</div>

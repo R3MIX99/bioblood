@@ -238,7 +238,7 @@ function renderPatientHeader() {
   const initial = (p.nombre || "?")[0].toUpperCase();
 
   const metaParts = [
-    p.edad     ? `${p.edad} anos`  : null,
+    p.edad     ? `${p.edad} años`  : null,
     p.sexo     || null,
     p.telefono || null,
     p.email    || null,
