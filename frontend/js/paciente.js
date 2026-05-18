@@ -145,7 +145,7 @@ function render() {
 
       <!-- Breadcrumb -->
       <div style="margin-bottom:var(--space-5)">
-        <a href="pacientes.html"
+        <a href="/pacientes.html"
            style="display:inline-flex;align-items:center;gap:var(--space-2);
                   font-size:var(--fs-sm);color:var(--text-muted);text-decoration:none">
           <i data-lucide="arrow-left" class="icon icon-md" aria-hidden="true"></i>
@@ -182,7 +182,7 @@ function renderErrorState() {
   root.innerHTML = `
     <div class="page-body">
       <div style="margin-bottom:var(--space-5)">
-        <a href="pacientes.html"
+        <a href="/pacientes.html"
            style="display:inline-flex;align-items:center;gap:var(--space-2);
                   font-size:var(--fs-sm);color:var(--text-muted);text-decoration:none">
           <i data-lucide="arrow-left" class="icon icon-md" aria-hidden="true"></i>
@@ -199,7 +199,7 @@ function renderErrorState() {
         <p style="font-size:var(--fs-sm);color:var(--text-light);margin-bottom:var(--space-5)">
           ${escHtml(state.error)}
         </p>
-        <a href="pacientes.html" class="btn-primary">
+        <a href="/pacientes.html" class="btn-primary">
           <i data-lucide="arrow-left" class="icon icon-md" aria-hidden="true"></i>
           Ir a directorio de pacientes
         </a>
