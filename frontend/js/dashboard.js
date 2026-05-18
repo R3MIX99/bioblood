@@ -25,7 +25,7 @@ async function initDashboard() {
     settled.map(r => r.status === "fulfilled" ? r.value : null);
 
   fillStats(stats);
-  renderActivityChart(activity);
+  try { renderActivityChart(activity); } catch(e) { console.error("[dashboard] chart:", e); }
   renderAlerts(alerts);
   renderRecentPatients(recentPatients);
   renderRecentStudies(recentStudies);
@@ -154,7 +154,8 @@ function renderActivityChart(data) {
   if (_activityChart) { _activityChart.destroy(); _activityChart = null; }
 
   const labels = data.map(d => {
-    const [year, month] = d.month.split("-");
+    const iso = d.monthISO ?? d.month ?? "";
+    const [year, month] = iso.split("-");
     return new Date(+year, +month - 1).toLocaleDateString("es-MX", { month: "short", year: "2-digit" });
   });
 
@@ -163,7 +164,7 @@ function renderActivityChart(data) {
     data: {
       labels,
       datasets: [{
-        data: data.map(d => d.count),
+        data: data.map(d => d.studies ?? d.count ?? 0),
         backgroundColor: "rgba(192,57,43,0.15)",
         borderColor: "rgba(192,57,43,0.75)",
         borderWidth: 2,
@@ -222,7 +223,8 @@ function renderRecentPatients(data) {
 
   el.innerHTML = data.map(p => {
     const initial = (p.nombre || "?")[0].toUpperCase();
-    const meta = [p.edad ? `${p.edad} anos` : "", p.sexo === "M" ? "Masculino" : p.sexo === "F" ? "Femenino" : ""].filter(Boolean).join(" · ");
+    const sexoLabel = p.sexo === "M" || p.sexo === "Masculino" ? "Masculino" : p.sexo === "F" || p.sexo === "Femenino" ? "Femenino" : "";
+    const meta = [p.edad ? `${p.edad} anos` : "", sexoLabel].filter(Boolean).join(" · ");
     return `
       <a href="/paciente?id=${p.id}" class="db-list-item" style="text-decoration:none">
         <div class="db-list-avatar">${initial}</div>
@@ -252,9 +254,9 @@ function renderRecentStudies(data) {
         <div class="db-list-avatar" style="background:var(--blue-100);color:var(--blue)">${initial}</div>
         <div style="flex:1;min-width:0">
           <div class="db-list-name">${s.patientName}</div>
-          <div class="db-list-sub">${s.componentCount} componente${s.componentCount !== 1 ? "s" : ""}</div>
+          <div class="db-list-sub">${s.components?.length ?? s.componentCount ?? 0} componente${(s.components?.length ?? s.componentCount ?? 0) !== 1 ? "s" : ""}</div>
         </div>
-        <div class="db-list-date">${fmtDate(s.date)}</div>
+        <div class="db-list-date">${fmtDate(s.fecha ?? s.date)}</div>
       </a>
     `;
   }).join("");
