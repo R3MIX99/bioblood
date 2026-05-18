@@ -6,7 +6,7 @@ const router  = require("express").Router();
 const bcrypt  = require("bcrypt");
 const jwt     = require("jsonwebtoken");
 const multer  = require("multer");
-const archiver = require("archiver");
+const { ZipArchive } = require("archiver");
 
 const {
   findDoctorById,
@@ -179,7 +179,7 @@ router.get("/export", async (req, res, next) => {
       "Content-Disposition": `attachment; filename="${filename}"`,
     });
 
-    const archive = archiver("zip", { zlib: { level: 6 } });
+    const archive = new ZipArchive({ zlib: { level: 6 } });
     archive.on("error", err => next(err));
     archive.pipe(res);
     archive.append(JSON.stringify(patients, null, 2), { name: "patients.json" });
