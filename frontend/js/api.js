@@ -1,5 +1,6 @@
 /* BioBlood — API client */
-const API_URL = window.BIOBLOOD_API || "http://localhost:3000";
+// Usa el mismo hostname que el browser para que funcione en LAN (192.168.x.x, etc.)
+const API_URL = window.BIOBLOOD_API || `http://${window.location.hostname}:3000`;
 
 /**
  * Wrapper sobre fetch que:

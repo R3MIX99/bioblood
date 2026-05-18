@@ -26,8 +26,13 @@ const app  = express();
 const PORT = process.env.PORT || 3000;
 
 // ── Middleware base ────────────────────────────────────────────────────────
+const localOriginRe = /^http:\/\/(localhost|127\.0\.0\.1|(192|10|172)\.\d{1,3}\.\d{1,3}\.\d{1,3})(:\d+)?$/;
 app.use(cors({
-  origin:      process.env.FRONTEND_URL || "http://localhost:5173",
+  origin: (origin, cb) => {
+    if (!origin || localOriginRe.test(origin)) return cb(null, true);
+    if (!isProd) return cb(null, true);
+    cb(new Error(`CORS: origen no permitido — ${origin}`));
+  },
   credentials: true,
 }));
 
