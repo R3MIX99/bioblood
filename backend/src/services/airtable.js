@@ -15,13 +15,16 @@ const ESTUDIOS  = process.env.AIRTABLE_ESTUDIOS_TABLE;
 function toDoctor(rec) {
   if (!rec) return null;
   const avatarAttachments = rec.get("avatar") || [];
+  // Prioriza el campo de texto "avatarUrl" (subido localmente);
+  // si no existe, cae al campo attachment de Airtable.
+  const avatarText = rec.get("avatarUrl") || null;
   return {
     id:           rec.id,
     email:        rec.get("email")        || "",
     passwordHash: rec.get("passwordHash") || "",
     googleId:     rec.get("googleId")     || "",
     nombre:       rec.get("nombre")       || "",
-    avatarUrl:    avatarAttachments[0]?.url ?? null,
+    avatarUrl:    avatarText ?? avatarAttachments[0]?.url ?? null,
     tokenVersion: rec.get("tokenVersion") ?? 0,
     createdAt:    rec._rawJson?.createdTime || null,
   };

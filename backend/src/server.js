@@ -1,5 +1,6 @@
 require("dotenv").config();
 
+const path         = require("path");
 const express      = require("express");
 const cors         = require("cors");
 const cookieParser = require("cookie-parser");
@@ -38,6 +39,10 @@ app.use(cors({
 
 app.use(express.json({ limit: "20mb" }));
 app.use(cookieParser());
+
+// Servir archivos estáticos (avatares, etc.)
+const publicDir = path.join(__dirname, "../../public");
+app.use(express.static(publicDir));
 
 // Sesión solo para el OAuth flow (memory store, sin persistencia)
 app.use(session({

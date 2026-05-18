@@ -9,8 +9,20 @@ async function initDashboard() {
   const root = document.getElementById("dashboard-root");
   if (!root) return;
 
+  // Renderizar con el JWT primero (rápido), luego refrescar nombre desde Airtable
   root.innerHTML = renderShell(doctor);
   if (window.lucide) lucide.createIcons();
+
+  // Cargar nombre real desde Airtable (por si el JWT está desactualizado)
+  apiFetch("/me").then(r => r.ok ? r.json() : null).then(me => {
+    if (!me) return;
+    const greetEl = root.querySelector(".db-greeting h1");
+    if (greetEl) {
+      const nombre = (me.nombre || me.email || "").split(" ")[0];
+      greetEl.textContent = `Hola, ${nombre}`;
+    }
+    if (window.__doctor) window.__doctor.nombre = me.nombre;
+  }).catch(() => {});
 
   const settled = await Promise.allSettled([
     apiFetch("/dashboard/stats").then(r => r.ok ? r.json() : null).catch(() => null),

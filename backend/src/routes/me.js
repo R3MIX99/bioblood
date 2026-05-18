@@ -1,7 +1,10 @@
-/* BioBlood — Rutas de cuenta del doctor /me (Fase 9) */
+/* BioBlood — Rutas de cuenta del doctor /me (Fase 9 + 11) */
 
+const path    = require("path");
+const fs      = require("fs");
 const router  = require("express").Router();
 const bcrypt  = require("bcrypt");
+const jwt     = require("jsonwebtoken");
 const multer  = require("multer");
 const archiver = require("archiver");
 
@@ -9,14 +12,31 @@ const {
   findDoctorById,
   patchDoctor,
   deleteDoctorCascade,
-  uploadDoctorAvatar,
   listPatientsByDoctor,
   listStudiesByDoctor,
 } = require("../services/airtable");
 const { invalidate, invalidatePrefix } = require("../services/cache");
 
 const COOKIE_NAME = "bb_token";
-const COOKIE_OPTS = { sameSite: "lax", secure: process.env.NODE_ENV === "production" };
+const COOKIE_OPTS = {
+  httpOnly: true,
+  sameSite: "lax",
+  secure:   process.env.NODE_ENV === "production",
+  maxAge:   7 * 24 * 60 * 60 * 1000,
+};
+
+function signToken(doctor) {
+  return jwt.sign(
+    {
+      id:           doctor.id,
+      email:        doctor.email,
+      nombre:       doctor.nombre,
+      tokenVersion: doctor.tokenVersion ?? 0,
+    },
+    process.env.JWT_SECRET || "dev-jwt-secret",
+    { expiresIn: "7d" }
+  );
+}
 
 // Multer: memoria, 2 MB, solo imágenes
 const upload = multer({
@@ -49,11 +69,19 @@ router.patch("/", async (req, res, next) => {
   try {
     const { nombre } = req.body;
     const fields = {};
-    if (nombre !== undefined) fields.nombre = String(nombre).trim() || undefined;
+    if (nombre !== undefined) {
+      const trimmed = String(nombre).trim();
+      if (!trimmed) return res.status(400).json({ error: "El nombre no puede estar vacío" });
+      fields.nombre = trimmed;
+    }
     if (!Object.keys(fields).length) return res.status(400).json({ error: "Nada que actualizar" });
 
     const updated = await patchDoctor(req.doctor.id, fields);
     if (!updated) return res.status(500).json({ error: "No se pudo actualizar el perfil" });
+
+    // Refrescar JWT para que el nuevo nombre se refleje en todas las páginas
+    const freshToken = signToken({ ...req.doctor, ...updated });
+    res.cookie(COOKIE_NAME, freshToken, COOKIE_OPTS);
 
     res.json({ nombre: updated.nombre, email: updated.email });
   } catch (e) { next(e); }
@@ -85,13 +113,31 @@ router.post("/password", async (req, res, next) => {
 });
 
 // ── POST /me/avatar ────────────────────────────────────────────────────────────
+// Almacena la imagen localmente en /public/avatars/ y guarda la URL en Airtable.
 router.post("/avatar", upload.single("file"), async (req, res, next) => {
   try {
     if (!req.file) return res.status(400).json({ error: "Se requiere un archivo de imagen" });
 
-    const { buffer, mimetype, originalname } = req.file;
-    const avatarUrl = await uploadDoctorAvatar(req.doctor.id, buffer, mimetype, originalname);
-    if (!avatarUrl) return res.status(500).json({ error: "No se pudo subir el avatar" });
+    const { buffer, mimetype } = req.file;
+
+    // Determinar extensión según MIME
+    const ext = mimetype === "image/png" ? "png"
+              : mimetype === "image/webp" ? "webp"
+              : "jpg";
+
+    // Guardar en public/avatars/{doctorId}.{ext}
+    const avatarsDir = path.join(__dirname, "../../../public/avatars");
+    if (!fs.existsSync(avatarsDir)) fs.mkdirSync(avatarsDir, { recursive: true });
+
+    const filename = `${req.doctor.id}.${ext}`;
+    fs.writeFileSync(path.join(avatarsDir, filename), buffer);
+
+    // URL accesible desde el frontend (el servidor Express sirve /public como estático)
+    const origin   = `${req.protocol}://${req.get("host")}`;
+    const avatarUrl = `${origin}/avatars/${filename}?t=${Date.now()}`;
+
+    // Persistir URL en Airtable (campo de texto "avatarUrl")
+    await patchDoctor(req.doctor.id, { avatarUrl });
 
     res.json({ avatarUrl });
   } catch (e) { next(e); }

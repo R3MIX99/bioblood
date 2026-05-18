@@ -222,6 +222,23 @@ function setLoading(btnId, loading, defaultLabel) {
   }
 }
 
+// Actualiza el avatar/inicial del header sin recargar la página
+function refreshHeaderUI(nombre, avatarUrl) {
+  if (window.__doctor) {
+    if (nombre)    window.__doctor.nombre    = nombre;
+    if (avatarUrl) window.__doctor.avatarUrl = avatarUrl;
+  }
+
+  // Actualizar botón avatar en la nav
+  const navAvatar = document.querySelector(".nav-avatar");
+  if (navAvatar && nombre) {
+    const initial = nombre[0].toUpperCase();
+    navAvatar.textContent = initial;
+    navAvatar.title       = nombre;
+    navAvatar.setAttribute("aria-label", `Menú de usuario: ${nombre}`);
+  }
+}
+
 // ── Perfil ────────────────────────────────────────────────────────────────────
 
 function attachProfileHandlers(me) {
@@ -245,6 +262,7 @@ function attachProfileHandlers(me) {
       const data = await res.json();
       if (!res.ok) { showToast(data.error || "Error al subir foto", "error"); return; }
 
+      // Preview inmediato en la página
       const display = document.getElementById("cfg-avatar-display");
       display.innerHTML = `
         <img src="${data.avatarUrl}" alt="Avatar" class="cfg-avatar-img" />
@@ -253,9 +271,12 @@ function attachProfileHandlers(me) {
         </div>
       `;
       if (window.lucide) lucide.createIcons({ nodes: [display] });
+
+      // Actualizar header si tuviera un avatar
+      refreshHeaderUI(null, data.avatarUrl);
       showToast("Foto actualizada", "success");
-    } catch (_) {
-      showToast("Error al subir la foto", "error");
+    } catch (err) {
+      showToast("Error al subir la foto: " + (err.message || ""), "error");
     }
   });
 
@@ -269,7 +290,8 @@ function attachProfileHandlers(me) {
       const data = await res.json();
       if (!res.ok) { showToast(data.error || "Error al guardar", "error"); return; }
 
-      if (window.__doctor) window.__doctor.nombre = data.nombre;
+      // Actualizar header y caché local — el JWT también fue refrescado en el servidor
+      refreshHeaderUI(data.nombre, null);
       showToast("Perfil guardado", "success");
     } catch (_) {
       showToast("Error al guardar el perfil", "error");
@@ -342,22 +364,29 @@ function attachExportHandlers() {
 
     try {
       const res = await apiFetch("/me/export");
-      if (!res.ok) { showToast("Error al exportar datos", "error"); return; }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        showToast(data.error || "Error al exportar datos", "error");
+        return;
+      }
 
       const blob = await res.blob();
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement("a");
       const date = new Date().toISOString().split("T")[0];
-      a.href     = url;
-      a.download = `bioblood-export-${date}.zip`;
+      a.href          = url;
+      a.download      = `bioblood-export-${date}.zip`;
+      a.style.display = "none";
+      document.body.appendChild(a);   // necesario para Firefox y Safari
       a.click();
-      URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
       showToast("Datos exportados correctamente", "success");
-    } catch (_) {
-      showToast("Error al exportar los datos", "error");
+    } catch (err) {
+      showToast("Error al exportar: " + (err.message || ""), "error");
     } finally {
-      btn.disabled    = false;
-      btn.innerHTML   = `<i data-lucide="download" class="icon icon-sm" aria-hidden="true"></i> Descargar mis datos`;
+      btn.disabled  = false;
+      btn.innerHTML = `<i data-lucide="download" class="icon icon-sm" aria-hidden="true"></i> Descargar mis datos`;
       if (window.lucide) lucide.createIcons({ nodes: [btn] });
     }
   });
