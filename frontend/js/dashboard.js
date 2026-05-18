@@ -44,7 +44,7 @@ function renderShell(doctor) {
   return `
     <div class="db-greeting">
       <h1>Hola, ${nombre}</h1>
-      <p>Aqui tienes el resumen de tu actividad medica</p>
+      <p>Aquí tienes el resumen de tu actividad médica</p>
     </div>
 
     <div class="db-stats-grid" id="db-stats">
@@ -59,31 +59,29 @@ function renderShell(doctor) {
       `).join("")}
     </div>
 
-    <div class="db-row-2col" style="margin-top:var(--space-6)">
-      <div class="db-section">
-        <div class="db-section-header">
-          <h2 class="db-section-title">
-            <i data-lucide="bar-chart-2" class="icon icon-md" aria-hidden="true"></i>
-            Actividad mensual
-          </h2>
-        </div>
-        <div class="db-chart-wrap">
-          <canvas id="activity-chart"></canvas>
-        </div>
+    <div class="db-section" style="margin-top:var(--space-6);animation-delay:280ms">
+      <div class="db-section-header">
+        <h2 class="db-section-title">
+          <i data-lucide="bar-chart-2" class="icon icon-md" aria-hidden="true"></i>
+          Actividad mensual
+        </h2>
       </div>
-      <div class="db-section">
+      <div class="db-chart-wrap">
+        <canvas id="activity-chart"></canvas>
+      </div>
+    </div>
+
+    <div class="db-row-3col" style="margin-top:var(--space-6)">
+      <div class="db-section" style="animation-delay:350ms">
         <div class="db-section-header">
           <h2 class="db-section-title">
             <i data-lucide="alert-triangle" class="icon icon-md" aria-hidden="true" style="color:var(--amber)"></i>
             Alertas recientes
           </h2>
         </div>
-        <div class="db-section-body" id="db-alerts">${skeletonRows}</div>
+        <div class="db-section-body db-section-scroll" id="db-alerts">${skeletonRows}</div>
       </div>
-    </div>
-
-    <div class="db-row-2col-equal" style="margin-top:var(--space-6)">
-      <div class="db-section">
+      <div class="db-section" style="animation-delay:420ms">
         <div class="db-section-header">
           <h2 class="db-section-title">
             <i data-lucide="users" class="icon icon-md" aria-hidden="true"></i>
@@ -91,24 +89,25 @@ function renderShell(doctor) {
           </h2>
           <a href="/pacientes" class="btn-ghost" style="font-size:12px;padding:5px 12px">Ver todos</a>
         </div>
-        <div class="db-section-body" id="db-patients-list">${skeletonRows}</div>
+        <div class="db-section-body db-section-scroll" id="db-patients-list">${skeletonRows}</div>
       </div>
-      <div class="db-section">
+      <div class="db-section" style="animation-delay:490ms">
         <div class="db-section-header">
           <h2 class="db-section-title">
             <i data-lucide="flask-conical" class="icon icon-md" aria-hidden="true"></i>
             Estudios recientes
           </h2>
         </div>
-        <div class="db-section-body" id="db-studies-list">${skeletonRows}</div>
+        <div class="db-section-body db-section-scroll" id="db-studies-list">${skeletonRows}</div>
       </div>
     </div>
 
-    <div class="db-section" style="margin-top:var(--space-6)">
+    <div class="db-section" style="margin-top:var(--space-6);animation-delay:560ms">
       <div class="db-section-header">
         <h2 class="db-section-title">
           <i data-lucide="trending-up" class="icon icon-md" aria-hidden="true"></i>
-          Componentes mas frecuentes (ultimos 30 dias)
+          Componentes más frecuentes
+          <span style="font-size:11px;font-weight:500;color:var(--text-light);margin-left:4px">(últimos 30 días)</span>
         </h2>
       </div>
       <div class="db-section-body" id="db-top-components">
@@ -160,33 +159,55 @@ function renderActivityChart(data) {
     return new Date(+year, +month - 1).toLocaleDateString("es-MX", { month: "short", year: "2-digit" });
   });
 
+  // Gradient fill
+  const ctx2d = canvas.getContext("2d");
+  const grad  = ctx2d.createLinearGradient(0, 0, 0, 260);
+  grad.addColorStop(0,   "rgba(192,57,43,0.22)");
+  grad.addColorStop(1,   "rgba(192,57,43,0.03)");
+
   _activityChart = new Chart(canvas, {
     type: "bar",
     data: {
       labels,
       datasets: [{
         data: data.map(d => d.studies ?? d.count ?? 0),
-        backgroundColor: "rgba(192,57,43,0.15)",
-        borderColor: "rgba(192,57,43,0.75)",
-        borderWidth: 2,
-        borderRadius: 6,
+        backgroundColor: grad,
+        borderColor: "rgba(192,57,43,0.70)",
+        borderWidth: 1.5,
+        borderRadius: 8,
         borderSkipped: false,
+        hoverBackgroundColor: "rgba(192,57,43,0.35)",
       }],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: { duration: 600, easing: "easeOutQuart" },
       plugins: {
         legend: { display: false },
         tooltip: {
+          backgroundColor: "#111318",
+          titleColor: "#FFFFFF",
+          bodyColor: "rgba(255,255,255,0.75)",
+          padding: 10,
+          cornerRadius: 8,
           callbacks: {
             label: ctx => ` ${ctx.parsed.y} estudio${ctx.parsed.y !== 1 ? "s" : ""}`,
           },
         },
       },
       scales: {
-        x: { grid: { display: false }, ticks: { font: { size: 11 }, color: "#8891A0" } },
-        y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 11 }, color: "#8891A0" }, grid: { color: "#E4E6EA" } },
+        x: {
+          grid: { display: false },
+          border: { display: false },
+          ticks: { font: { size: 11, family: "'Red Hat Display', sans-serif" }, color: "#8891A0" },
+        },
+        y: {
+          beginAtZero: true,
+          border: { display: false, dash: [4, 4] },
+          ticks: { stepSize: 1, font: { size: 11 }, color: "#8891A0", padding: 8 },
+          grid: { color: "rgba(228,230,234,0.7)" },
+        },
       },
     },
   });

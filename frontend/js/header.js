@@ -3,7 +3,7 @@
 const NAV_TABS = [
   { label: "Dashboard",     href: "/dashboard",     page: "dashboard",  icon: "layout-dashboard" },
   { label: "Pacientes",     href: "/pacientes",     page: "pacientes",  icon: "users" },
-  { label: "Configuracion", href: "#",              page: "config",     icon: "settings" },
+  { label: "Configuración", href: "/configuracion",  page: "config",     icon: "settings" },
 ];
 
 async function initHeader() {
@@ -62,9 +62,9 @@ async function initHeader() {
           <button class="btn-icon" aria-label="Notificaciones" title="Notificaciones">
             <i data-lucide="bell" class="icon icon-md" aria-hidden="true"></i>
           </button>
-          <button class="btn-icon" aria-label="Configuración" title="Configuración">
+          <a href="/configuracion" class="btn-icon" aria-label="Configuración" title="Configuración" style="text-decoration:none">
             <i data-lucide="settings" class="icon icon-md" aria-hidden="true"></i>
-          </button>
+          </a>
           <button
             class="nav-avatar"
             aria-label="Menú de usuario: ${doctor.nombre || doctor.email}"
@@ -112,6 +112,16 @@ function handleAvatarMenu(e) {
       <p style="font-weight:600; font-size:13px; color:var(--text); margin:0; font-family:var(--font-body)">${doctor.nombre || ""}</p>
       <p style="font-size:11px; color:var(--text-light); margin:2px 0 0; font-family:var(--font-body)">${doctor.email || ""}</p>
     </div>
+    <a href="/configuracion" style="
+      width:100%; display:flex; align-items:center; gap:8px;
+      padding: 8px 12px; border-radius:8px;
+      background:transparent; color:var(--text);
+      font-size:13px; font-weight:500; cursor:pointer;
+      font-family:var(--font-body); text-decoration:none;
+    " onclick="document.getElementById('avatar-menu')?.remove()">
+      <i data-lucide="settings" style="width:16px;height:16px;stroke-width:1.75" aria-hidden="true"></i>
+      Configuración
+    </a>
     <button onclick="doLogout()" style="
       width:100%; display:flex; align-items:center; gap:8px;
       padding: 8px 12px; border:none; border-radius:8px;
