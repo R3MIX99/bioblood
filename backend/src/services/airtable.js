@@ -118,11 +118,12 @@ async function findDoctorById(id) {
 
 async function listPatients(doctorId) {
   try {
-    // Filtra por el record ID del doctor en el campo linked "doctor"
-    const records = await base(PACIENTES)
-      .select({ filterByFormula: `FIND("${doctorId}", ARRAYJOIN({doctor}))` })
-      .all();
-    return records.map(toPatient);
+    // ARRAYJOIN sobre campos linked devuelve el valor del campo primario (email),
+    // no el record ID — por eso filtramos en JS después de mapear.
+    const records = await base(PACIENTES).select().all();
+    return records
+      .map(toPatient)
+      .filter(p => p && p.doctorId === doctorId);
   } catch (e) {
     console.error("listPatients:", e.message);
     return [];
@@ -215,10 +216,12 @@ async function getStudy(id) {
 
 async function listStudies(patientId) {
   try {
-    const records = await base(ESTUDIOS)
-      .select({ filterByFormula: `FIND("${patientId}", ARRAYJOIN({paciente}))` })
-      .all();
-    return records.map(toStudy);
+    // Mismo problema que listPatients: ARRAYJOIN devuelve valores del campo primario,
+    // no record IDs. Filtramos en JS con el patientId extraído por toStudy().
+    const records = await base(ESTUDIOS).select().all();
+    return records
+      .map(toStudy)
+      .filter(s => s && s.patientId === patientId);
   } catch (e) {
     console.error("listStudies:", e.message);
     return [];
