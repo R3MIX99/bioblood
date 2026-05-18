@@ -412,6 +412,23 @@
 .row-status-low    { background: #FFFDE7 !important; }
 .row-status-normal { background: #F1F8F4 !important; }
 
+/* Cell value colors */
+.pivot-cell-normal { color: var(--green); font-weight: 700; }
+.pivot-cell-alto   { color: var(--red);   font-weight: 700; }
+.pivot-cell-bajo   { color: var(--amber); font-weight: 700; }
+.pivot-cell-nd     { color: var(--text-light); }
+.pivot-cell-empty  { color: var(--border); font-weight: 400; }
+
+/* Sticky first-col header in thead */
+.pivot-table thead tr:first-child th:first-child,
+.pivot-table thead tr:nth-child(2) th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+}
+.pivot-table thead tr:first-child th:first-child { background: var(--crimson); }
+.pivot-table thead tr:nth-child(2) th:first-child { background: var(--surface-tint); }
+
 /* Table header card */
 .table-header {
   display: flex;

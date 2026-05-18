@@ -548,7 +548,7 @@ async function handleDelete(id) {
 
 // ── Navegación ────────────────────────────────────────────────────────────────
 function goToPatient(id) {
-  window.location.href = `/paciente.html?id=${id}`;
+  window.location.href = `/paciente?id=${id}`;
 }
 
 // ── Utilidades ────────────────────────────────────────────────────────────────

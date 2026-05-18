@@ -24,7 +24,12 @@ const COOKIE_OPTS = {
 
 function signToken(doctor) {
   return jwt.sign(
-    { id: doctor.id, email: doctor.email, nombre: doctor.nombre },
+    {
+      id:           doctor.id,
+      email:        doctor.email,
+      nombre:       doctor.nombre,
+      tokenVersion: doctor.tokenVersion ?? 0,
+    },
     process.env.JWT_SECRET || "dev-jwt-secret",
     { expiresIn: "7d" }
   );

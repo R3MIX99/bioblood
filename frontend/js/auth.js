@@ -3,8 +3,18 @@
 // Redirigir si ya tiene sesión activa
 (async () => {
   const doctor = await getSession();
-  if (doctor) window.location.replace("pacientes.html");
+  if (doctor) window.location.replace(resolveReturnTo());
 })();
+
+function resolveReturnTo() {
+  const raw = new URLSearchParams(window.location.search).get("returnTo");
+  if (!raw) return "/pacientes.html";
+  try {
+    const decoded = decodeURIComponent(raw);
+    if (new URL(decoded).origin === window.location.origin) return decoded;
+  } catch (_) {}
+  return "/pacientes.html";
+}
 
 // ── Estado ────────────────────────────────────────────────────────────────
 let activeTab = "login"; // "login" | "register"
@@ -175,7 +185,7 @@ async function handleSubmit(e) {
     }
 
     // Éxito — redirigir
-    window.location.replace("pacientes.html");
+    window.location.replace(resolveReturnTo());
   } catch {
     showError("Error de conexión. Verifica que el backend esté corriendo.");
     setLoading(false);

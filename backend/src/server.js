@@ -97,16 +97,17 @@ app.use(passport.session());
 // ── Rutas ─────────────────────────────────────────────────────────────────
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
-app.use("/auth",     require("./routes/auth"));
-app.use("/patients", require("./routes/patients"));
-app.use("/studies",  require("./routes/studies"));
-// app.use("/ai",       require("./routes/ai"));        // Fase 5
+const { requireAuth } = require("./middleware/auth");
+
+app.use("/auth",      require("./routes/auth"));
+app.use("/patients",  require("./routes/patients"));
+app.use("/studies",   require("./routes/studies"));
+app.use("/dashboard", requireAuth, require("./routes/dashboard"));
+app.use("/me",        requireAuth, require("./routes/me"));
+// app.use("/ai",     require("./routes/ai"));        // Fase 5
 
 // ── Error handler ─────────────────────────────────────────────────────────
-app.use((err, _req, res, _next) => {
-  console.error(err);
-  res.status(err.status || 500).json({ error: err.message || "Error interno del servidor" });
-});
+app.use(require("./middleware/error"));
 
 // ── Arranque ──────────────────────────────────────────────────────────────
 app.listen(PORT, () => {

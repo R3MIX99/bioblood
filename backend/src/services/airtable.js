@@ -14,12 +14,16 @@ const ESTUDIOS  = process.env.AIRTABLE_ESTUDIOS_TABLE;
 /** Convierte un record de Airtable en un objeto plano. */
 function toDoctor(rec) {
   if (!rec) return null;
+  const avatarAttachments = rec.get("avatar") || [];
   return {
     id:           rec.id,
     email:        rec.get("email")        || "",
     passwordHash: rec.get("passwordHash") || "",
     googleId:     rec.get("googleId")     || "",
     nombre:       rec.get("nombre")       || "",
+    avatarUrl:    avatarAttachments[0]?.url ?? null,
+    tokenVersion: rec.get("tokenVersion") ?? 0,
+    createdAt:    rec._rawJson?.createdTime || null,
   };
 }
 
@@ -271,18 +275,183 @@ async function deleteStudy(id) {
   }
 }
 
+// ── Funciones nuevas (Fase 9) ──────────────────────────────────────────────
+
+/** Cuenta pacientes de un doctor (JS-side filter, igual que listPatients). */
+async function countPatientsByDoctor(doctorId) {
+  const patients = await listPatients(doctorId);
+  return patients.length;
+}
+
+/**
+ * Lista todos los estudios del doctor resolviendo nombre de paciente.
+ * Soporta filtros opcionales: limit, fromISO (fecha>=), toISO (fecha<=).
+ */
+async function listStudiesByDoctor(doctorId, { limit, fromISO, toISO } = {}) {
+  try {
+    const patients   = await listPatients(doctorId);
+    const patientMap = new Map(patients.map(p => [p.id, p]));
+
+    const records = await base(ESTUDIOS).select().all();
+    let studies = records
+      .map(toStudy)
+      .filter(s => s && patientMap.has(s.patientId))
+      .map(s => ({ ...s, patientName: patientMap.get(s.patientId)?.nombre || "" }));
+
+    if (fromISO) studies = studies.filter(s => s.fecha && s.fecha >= fromISO);
+    if (toISO)   studies = studies.filter(s => s.fecha && s.fecha <= toISO);
+
+    studies.sort((a, b) => {
+      if (!a.fecha && !b.fecha) return 0;
+      if (!a.fecha) return 1;
+      if (!b.fecha) return -1;
+      return b.fecha.localeCompare(a.fecha);
+    });
+
+    return limit ? studies.slice(0, limit) : studies;
+  } catch (e) {
+    console.error("listStudiesByDoctor:", e.message);
+    return [];
+  }
+}
+
+/** Cuenta estudios totales del doctor. */
+async function countStudiesByDoctor(doctorId) {
+  const studies = await listStudiesByDoctor(doctorId, {});
+  return studies.length;
+}
+
+/** Cuenta estudios del doctor en un rango de fechas ISO (YYYY-MM-DD). */
+async function countStudiesByDoctorInRange(doctorId, fromISO, toISO) {
+  const studies = await listStudiesByDoctor(doctorId, { fromISO, toISO });
+  return studies.length;
+}
+
+/** Lista pacientes del doctor con ordenamiento y paginación. */
+async function listPatientsByDoctor(doctorId, { limit, sort = "-createdAt" } = {}) {
+  try {
+    const patients = await listPatients(doctorId);
+    if (sort === "-createdAt") {
+      patients.sort((a, b) => {
+        if (!a.createdAt && !b.createdAt) return 0;
+        if (!a.createdAt) return 1;
+        if (!b.createdAt) return -1;
+        return b.createdAt.localeCompare(a.createdAt);
+      });
+    }
+    return limit ? patients.slice(0, limit) : patients;
+  } catch (e) {
+    console.error("listPatientsByDoctor:", e.message);
+    return [];
+  }
+}
+
+/** Busca un estudio por ID validando que su paciente pertenezca al doctor. */
+async function findStudyById(id, doctorId) {
+  try {
+    const study = await getStudy(id);
+    if (!study) return null;
+    const patient = await getPatient(study.patientId, doctorId);
+    return patient ? study : null;
+  } catch (e) {
+    console.error("findStudyById:", e.message);
+    return null;
+  }
+}
+
+/** Actualiza campos parciales del doctor. */
+async function patchDoctor(id, fields) {
+  try {
+    const [rec] = await base(DOCTORES).update([{ id, fields }]);
+    return toDoctor(rec);
+  } catch (e) {
+    console.error("patchDoctor:", e.message);
+    return null;
+  }
+}
+
+/**
+ * Borra en cascada: estudios → pacientes → doctor.
+ * Usa batches de 10 (límite de la API de Airtable).
+ */
+async function deleteDoctorCascade(id) {
+  try {
+    const patients = await listPatients(id);
+
+    for (const patient of patients) {
+      const studies = await listStudies(patient.id);
+      for (let i = 0; i < studies.length; i += 10) {
+        await base(ESTUDIOS).destroy(studies.slice(i, i + 10).map(s => s.id));
+      }
+    }
+
+    for (let i = 0; i < patients.length; i += 10) {
+      await base(PACIENTES).destroy(patients.slice(i, i + 10).map(p => p.id));
+    }
+
+    await base(DOCTORES).destroy([id]);
+    return true;
+  } catch (e) {
+    console.error("deleteDoctorCascade:", e.message);
+    return false;
+  }
+}
+
+/**
+ * Sube un avatar como attachment al campo multipleAttachments "avatar"
+ * usando la Airtable Content API.
+ * Requiere AIRTABLE_AVATAR_FIELD_ID en el entorno.
+ */
+async function uploadDoctorAvatar(doctorId, fileBuffer, mimeType, filename) {
+  const apiKey  = process.env.AIRTABLE_API_KEY;
+  const baseId  = process.env.AIRTABLE_BASE_ID;
+  const fieldId = process.env.AIRTABLE_AVATAR_FIELD_ID;
+
+  if (!fieldId) throw new Error("AIRTABLE_AVATAR_FIELD_ID no configurado en .env");
+
+  const form = new FormData();
+  form.append("file",     new Blob([fileBuffer], { type: mimeType }), filename);
+  form.append("filename", filename);
+
+  const resp = await fetch(
+    `https://content.airtable.com/v0/${baseId}/${doctorId}/${fieldId}/uploadAttachment`,
+    {
+      method:  "POST",
+      headers: { Authorization: `Bearer ${apiKey}` },
+      body:    form,
+    }
+  );
+
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.error?.message || `Error ${resp.status} al subir avatar`);
+  }
+
+  const { attachment } = await resp.json();
+  return attachment?.url || null;
+}
+
 module.exports = {
   findDoctorByEmail,
   findDoctorByGoogleId,
   findDoctorById,
   createDoctor,
+  patchDoctor,
+  deleteDoctorCascade,
+  uploadDoctorAvatar,
   listPatients,
+  listPatientsByDoctor,
+  countPatientsByDoctor,
   getPatient,
   createPatient,
   updatePatient,
   deletePatient,
   getStudy,
+  findStudyById,
   listStudies,
+  listStudiesByDoctor,
+  countStudiesByDoctor,
+  countStudiesByDoctorInRange,
   createStudy,
   deleteStudy,
 };

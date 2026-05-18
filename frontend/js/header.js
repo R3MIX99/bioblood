@@ -19,15 +19,10 @@ async function initHeader() {
       if (res.ok) {
         doctor = await res.json();
         window.__doctor = doctor;
-      } else {
-        window.location.replace("login.html");
-        return;
       }
-    } catch {
-      window.location.replace("login.html");
-      return;
-    }
+    } catch (_) {}
   }
+  if (!doctor) return; // requireSession() en la página manejará la redirección
 
   // Determinar tab activa según data-page del body
   const currentPage = document.body.dataset.page || "";
@@ -142,7 +137,7 @@ function handleAvatarMenu(e) {
 
 async function doLogout() {
   try { await apiFetch("/auth/logout", { method: "POST" }); } catch (_) {}
-  window.location.replace("login.html");
+  window.location.replace("/login.html");
 }
 
 // Auto-inicializar al cargar

@@ -42,7 +42,8 @@ async function requireSession() {
     return doctor;
   } catch {
     if (!window.location.pathname.endsWith("login.html")) {
-      window.location.replace("login.html");
+      const returnTo = encodeURIComponent(window.location.href);
+      window.location.replace(`/login.html?returnTo=${returnTo}`);
     }
   }
 }

@@ -20,7 +20,7 @@ async function init() {
   state.patientId = params.get("id");
 
   if (!state.patientId) {
-    window.location.replace("pacientes.html");
+    window.location.replace("/pacientes.html");
     return;
   }
 
@@ -43,7 +43,11 @@ async function init() {
 async function fetchPatient(id) {
   try {
     const res = await apiFetch(`/patients/${id}`);
-    if (res.status === 401) { window.location.replace("login.html"); return null; }
+    if (res.status === 401) {
+      const returnTo = encodeURIComponent(window.location.href);
+      window.location.replace(`/login.html?returnTo=${returnTo}`);
+      return null;
+    }
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       state.error = body.error || `Error ${res.status} al cargar el paciente.`;
@@ -161,6 +165,12 @@ function render() {
 
       <!-- Lista de estudios -->
       <div id="studies-section"></div>
+
+      <!-- Tabla pivote comparativa (visible con ≥2 estudios) -->
+      <div id="pivot-section" style="margin-top:var(--space-8)"></div>
+
+      <!-- Gráficas de tendencia (visible con ≥2 estudios) -->
+      <div id="graficas-section" style="margin-top:var(--space-8)"></div>
 
     </div>
     <div id="toast-container"></div>`;
@@ -395,6 +405,8 @@ function renderStudiesSection() {
     <div id="studies-list"></div>`;
 
   renderStudiesList();
+  renderPivotTable(state.studies, "pivot-section");
+  renderGraficas(state.studies, "graficas-section");
 }
 
 function renderStudiesList() {

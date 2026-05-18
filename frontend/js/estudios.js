@@ -94,3 +94,135 @@ function getStudySummary(study) {
     normales: components.filter(c => (c.status || "").toLowerCase() === "normal").length,
   };
 }
+
+// ── Fase 6: Tabla pivote comparativa ─────────────────────────────────────────
+
+function buildPivotData(studies) {
+  const sorted = [...studies].sort((a, b) => {
+    if (!a.fecha && !b.fecha) return 0;
+    if (!a.fecha) return 1;
+    if (!b.fecha) return -1;
+    return a.fecha.localeCompare(b.fecha);
+  });
+
+  // Recopilar nombres únicos de componentes (normalizado → metadatos)
+  const seen = new Map();
+  for (const study of sorted) {
+    for (const comp of (study.components || [])) {
+      const norm = localNormalize(comp.name);
+      if (!seen.has(norm)) seen.set(norm, { displayName: comp.name, unit: comp.unit || "" });
+    }
+  }
+
+  // Construir filas: una por componente
+  const rows = [...seen.entries()].map(([norm, meta]) => ({
+    displayName: meta.displayName,
+    unit: meta.unit,
+    cells: sorted.map(study => {
+      const comp = (study.components || []).find(c => localNormalize(c.name) === norm);
+      return comp ? { value: comp.value, unit: comp.unit, status: comp.status } : null;
+    }),
+  }));
+
+  // Ordenar: primero los que aparecen en más estudios, luego alfabético
+  rows.sort((a, b) => {
+    const aFill = a.cells.filter(Boolean).length;
+    const bFill = b.cells.filter(Boolean).length;
+    if (bFill !== aFill) return bFill - aFill;
+    return a.displayName.localeCompare(b.displayName, "es");
+  });
+
+  return { studies: sorted, rows };
+}
+
+function renderPivotTable(studies, containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+
+  if (!studies || studies.length < 2) {
+    el.innerHTML = "";
+    return;
+  }
+
+  const { studies: sorted, rows } = buildPivotData(studies);
+
+  // Fila 1 del thead: laboratorios (fondo crimson via CSS)
+  const labHeaders = sorted.map(s =>
+    `<th>${escHtml(s.labName || "Laboratorio")}</th>`
+  ).join("");
+
+  // Fila 2 del thead: fechas (fondo surface-tint via CSS)
+  const dateHeaders = sorted.map(s =>
+    `<th>${escHtml(formatDate(s.fecha))}</th>`
+  ).join("");
+
+  // Filas del cuerpo
+  const bodyRows = rows.map(row => {
+    const statuses = row.cells.filter(Boolean).map(c => (c.status || "nd").toLowerCase());
+    let rowClass = "";
+    if (statuses.some(s => s === "alto"))      rowClass = "row-status-high";
+    else if (statuses.some(s => s === "bajo")) rowClass = "row-status-low";
+    else if (statuses.length && statuses.every(s => s === "normal")) rowClass = "row-status-normal";
+
+    const cells = row.cells.map(cell => {
+      if (!cell) return `<td class="pivot-cell-empty" style="text-align:center">—</td>`;
+      const s = (cell.status || "nd").toLowerCase();
+      const cls = s === "alto" ? "pivot-cell-alto"
+        : s === "bajo"   ? "pivot-cell-bajo"
+        : s === "normal" ? "pivot-cell-normal"
+        : "pivot-cell-nd";
+      return `<td style="text-align:center">
+        <span class="${cls}">${cell.value ?? "—"}</span>
+      </td>`;
+    }).join("");
+
+    return `<tr class="${rowClass}">
+      <td>${escHtml(row.displayName)}</td>
+      <td style="text-align:center;color:var(--text-muted)">${escHtml(row.unit)}</td>
+      ${cells}
+    </tr>`;
+  }).join("");
+
+  const dot = (color, label) =>
+    `<span style="display:inline-flex;align-items:center;gap:5px;
+                  font-size:var(--fs-xs);color:var(--text-muted)">
+      <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0"></span>
+      ${label}
+    </span>`;
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;
+                gap:var(--space-3);margin-bottom:var(--space-4);flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:var(--space-3)">
+        <h2 style="font-family:var(--font-display);font-size:var(--fs-h2);color:var(--text)">
+          Tabla comparativa
+        </h2>
+        <span class="badge-count">${sorted.length} estudios</span>
+      </div>
+      <div style="display:flex;gap:var(--space-4);align-items:center">
+        ${dot("var(--red)",   "Alto")}
+        ${dot("var(--amber)", "Bajo")}
+        ${dot("var(--green)", "Normal")}
+      </div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);
+                border-radius:var(--radius-xl);overflow:hidden;box-shadow:var(--shadow-sm)">
+      <div class="table-container">
+        <table class="pivot-table">
+          <thead>
+            <tr>
+              <th style="text-align:left">Componente</th>
+              <th style="text-align:center">Unidad</th>
+              ${labHeaders}
+            </tr>
+            <tr>
+              <th></th>
+              <th></th>
+              ${dateHeaders}
+            </tr>
+          </thead>
+          <tbody>${bodyRows}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
