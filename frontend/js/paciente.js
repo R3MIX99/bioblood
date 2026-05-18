@@ -7,10 +7,11 @@ const state = {
   patient:        null,
   studies:        [],
   loading:        true,
+  error:          null,   // mensaje de error global
   uploading:      false,
   uploadProgress: 0,
-  expandedId:     null,  // id del estudio expandido
-  pendingFile:    null,  // File pendiente de confirmar subida
+  expandedId:     null,
+  pendingFile:    null,
 };
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -42,10 +43,19 @@ async function init() {
 async function fetchPatient(id) {
   try {
     const res = await apiFetch(`/patients/${id}`);
-    if (res.status === 404) { window.location.replace("pacientes.html"); return null; }
-    if (!res.ok) return null;
+    if (res.status === 401) { window.location.replace("login.html"); return null; }
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      state.error = body.error || `Error ${res.status} al cargar el paciente.`;
+      console.error("fetchPatient:", res.status, state.error);
+      return null;
+    }
     return res.json();
-  } catch (_) { return null; }
+  } catch (err) {
+    state.error = "Error de red. Verifica que el servidor esté corriendo.";
+    console.error("fetchPatient:", err);
+    return null;
+  }
 }
 
 async function fetchStudies(patientId) {
@@ -155,9 +165,47 @@ function render() {
     </div>
     <div id="toast-container"></div>`;
 
-  renderPatientHeader();
-  renderUploadSection();
-  renderStudiesSection();
+  if (state.error) {
+    renderErrorState();
+  } else {
+    renderPatientHeader();
+    renderUploadSection();
+    renderStudiesSection();
+  }
+  if (window.lucide) lucide.createIcons();
+}
+
+// ── Estado de error ───────────────────────────────────────────────────────────
+function renderErrorState() {
+  const root = document.getElementById("paciente-root");
+  if (!root) return;
+  root.innerHTML = `
+    <div class="page-body">
+      <div style="margin-bottom:var(--space-5)">
+        <a href="pacientes.html"
+           style="display:inline-flex;align-items:center;gap:var(--space-2);
+                  font-size:var(--fs-sm);color:var(--text-muted);text-decoration:none">
+          <i data-lucide="arrow-left" class="icon icon-md" aria-hidden="true"></i>
+          Volver a pacientes
+        </a>
+      </div>
+      <div class="card" style="text-align:center;padding:60px 40px">
+        <div style="margin-bottom:var(--space-4);color:var(--red)">
+          <i data-lucide="alert-circle" class="icon" style="width:48px;height:48px;stroke-width:1.5" aria-hidden="true"></i>
+        </div>
+        <h2 style="font-family:var(--font-display);font-size:var(--fs-h2);color:var(--text);margin-bottom:var(--space-2)">
+          No se pudo cargar el paciente
+        </h2>
+        <p style="font-size:var(--fs-sm);color:var(--text-light);margin-bottom:var(--space-5)">
+          ${escHtml(state.error)}
+        </p>
+        <a href="pacientes.html" class="btn-primary">
+          <i data-lucide="arrow-left" class="icon icon-md" aria-hidden="true"></i>
+          Ir a directorio de pacientes
+        </a>
+      </div>
+    </div>
+    <div id="toast-container"></div>`;
   if (window.lucide) lucide.createIcons();
 }
 

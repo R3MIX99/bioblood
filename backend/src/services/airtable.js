@@ -32,10 +32,13 @@ function toPatient(rec) {
   if (!rec) return null;
   const doctorLinks = rec.get("doctor") || [];
   const sexoRaw     = rec.get("sexo") || null;
+  // El SDK puede devolver string ID o {id, name} — normalizamos ambos casos
+  const rawLink  = doctorLinks[0];
+  const doctorId = typeof rawLink === "string" ? rawLink : (rawLink?.id || null);
   return {
     id:            rec.id,
     nombre:        rec.get("nombre")        || "",
-    doctorId:      doctorLinks[0]           || null,
+    doctorId,
     edad:          rec.get("edad")          ?? null,
     sexo:          SEXO_TO_APP[sexoRaw]     || sexoRaw,   // "M" → "Masculino"
     telefono:      rec.get("telefono")      || "",
@@ -54,10 +57,12 @@ function toStudy(rec) {
   const pacienteLinks = rec.get("paciente") || [];
   let components = [];
   try { components = JSON.parse(rec.get("componentsJSON") || "[]"); } catch (_) {}
+  const rawPaciente = pacienteLinks[0];
+  const patientId   = typeof rawPaciente === "string" ? rawPaciente : (rawPaciente?.id || null);
   return {
     id:         rec.id,
     filename:   rec.get("filename")  || "",
-    patientId:  pacienteLinks[0]     || null,
+    patientId,
     fecha:      rec.get("fecha")     || null,
     labName:    rec.get("labName")   || "",
     components,
@@ -132,10 +137,13 @@ async function listPatients(doctorId) {
 
 async function getPatient(id, doctorId) {
   try {
-    const rec = await base(PACIENTES).find(id);
+    const rec     = await base(PACIENTES).find(id);
     const patient = toPatient(rec);
-    // Validar ownership
-    if (!patient || patient.doctorId !== doctorId) return null;
+    if (!patient) return null;
+    if (patient.doctorId !== doctorId) {
+      console.warn(`getPatient ownership fail — patient.doctorId="${patient.doctorId}" vs doctorId="${doctorId}"`);
+      return null;
+    }
     return patient;
   } catch (e) {
     console.error("getPatient:", e.message);
