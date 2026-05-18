@@ -1,10 +1,9 @@
 /* BioBlood — Top navigation inyectable */
 
 const NAV_TABS = [
-  { label: "Dashboard",     href: "pacientes.html", page: "dashboard",  icon: "layout-dashboard" },
-  { label: "Pacientes",     href: "pacientes.html", page: "pacientes",  icon: "users" },
-  { label: "Estudios",      href: "paciente.html",  page: "estudios",   icon: "flask-conical" },
-  { label: "Configuración", href: "#",              page: "config",     icon: "settings" },
+  { label: "Dashboard",     href: "/dashboard",     page: "dashboard",  icon: "layout-dashboard" },
+  { label: "Pacientes",     href: "/pacientes",     page: "pacientes",  icon: "users" },
+  { label: "Configuracion", href: "#",              page: "config",     icon: "settings" },
 ];
 
 async function initHeader() {
@@ -46,7 +45,7 @@ async function initHeader() {
       <div class="top-nav container">
 
         <!-- Logo -->
-        <a href="pacientes.html" class="nav-logo" aria-label="BioBlood — inicio">
+        <a href="/dashboard" class="nav-logo" aria-label="BioBlood — inicio">
           <div class="nav-logo-icon">
             <i data-lucide="droplet" class="icon icon-lg" aria-hidden="true"></i>
           </div>
