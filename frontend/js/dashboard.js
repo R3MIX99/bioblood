@@ -24,12 +24,13 @@ async function initDashboard() {
   const [stats, activity, recentPatients, recentStudies, alerts, topComponents] =
     settled.map(r => r.status === "fulfilled" ? r.value : null);
 
-  fillStats(stats);
-  try { renderActivityChart(activity); } catch(e) { console.error("[dashboard] chart:", e); }
-  renderAlerts(alerts);
-  renderRecentPatients(recentPatients);
-  renderRecentStudies(recentStudies);
-  renderTopComponents(topComponents);
+  const run = (fn, label) => { try { fn(); } catch(e) { console.error(`[dashboard] ${label}:`, e); } };
+  run(() => fillStats(stats),                    "fillStats");
+  run(() => renderActivityChart(activity),       "chart");
+  run(() => renderAlerts(alerts),                "alerts");
+  run(() => renderRecentPatients(recentPatients),"recentPatients");
+  run(() => renderRecentStudies(recentStudies),  "recentStudies");
+  run(() => renderTopComponents(topComponents),  "topComponents");
 
   if (window.lucide) lucide.createIcons();
 }

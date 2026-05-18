@@ -137,19 +137,19 @@ async function getAlerts(doctorId, limit = 10) {
     const abnormal = components.filter(c => c.status === "alto" || c.status === "bajo");
     if (abnormal.length === 0) continue;
 
-    alerts.push({
-      patientId:   study.patientId,
-      patientName: study.patientName || "",
-      studyId:     study.id,
-      date:        study.fecha,
-      abnormalComponents: abnormal.map(c => ({
-        name:   c.name,
-        value:  c.value,
-        status: c.status,
-        unit:   c.unit || "",
-      })),
-    });
-
+    for (const comp of abnormal) {
+      alerts.push({
+        patientId:   study.patientId,
+        patientName: study.patientName || "",
+        studyId:     study.id,
+        studyDate:   study.fecha,
+        component:   comp.name,
+        value:       comp.value,
+        unit:        comp.unit || "",
+        status:      comp.status,
+      });
+      if (alerts.length >= limit) break;
+    }
     if (alerts.length >= limit) break;
   }
 
