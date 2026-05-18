@@ -12,22 +12,24 @@ async function initDashboard() {
   root.innerHTML = renderShell(doctor);
   if (window.lucide) lucide.createIcons();
 
-  const [stats, activity, recentPatients, recentStudies, alerts, topComponents] =
-    await Promise.allSettled([
-      apiFetch("/dashboard/stats").then(r => r.ok ? r.json() : null),
-      apiFetch("/dashboard/activity?months=12").then(r => r.ok ? r.json() : null),
-      apiFetch("/dashboard/recent-patients?limit=6").then(r => r.ok ? r.json() : null),
-      apiFetch("/dashboard/recent-studies?limit=6").then(r => r.ok ? r.json() : null),
-      apiFetch("/dashboard/alerts?limit=8").then(r => r.ok ? r.json() : null),
-      apiFetch("/dashboard/top-components?days=30&limit=8").then(r => r.ok ? r.json() : null),
-    ]);
+  const settled = await Promise.allSettled([
+    apiFetch("/dashboard/stats").then(r => r.ok ? r.json() : null).catch(() => null),
+    apiFetch("/dashboard/activity?months=12").then(r => r.ok ? r.json() : null).catch(() => null),
+    apiFetch("/dashboard/recent-patients?limit=6").then(r => r.ok ? r.json() : null).catch(() => null),
+    apiFetch("/dashboard/recent-studies?limit=6").then(r => r.ok ? r.json() : null).catch(() => null),
+    apiFetch("/dashboard/alerts?limit=8").then(r => r.ok ? r.json() : null).catch(() => null),
+    apiFetch("/dashboard/top-components?days=30&limit=8").then(r => r.ok ? r.json() : null).catch(() => null),
+  ]);
 
-  fillStats(stats.value);
-  renderActivityChart(activity.value);
-  renderAlerts(alerts.value);
-  renderRecentPatients(recentPatients.value);
-  renderRecentStudies(recentStudies.value);
-  renderTopComponents(topComponents.value);
+  const [stats, activity, recentPatients, recentStudies, alerts, topComponents] =
+    settled.map(r => r.status === "fulfilled" ? r.value : null);
+
+  fillStats(stats);
+  renderActivityChart(activity);
+  renderAlerts(alerts);
+  renderRecentPatients(recentPatients);
+  renderRecentStudies(recentStudies);
+  renderTopComponents(topComponents);
 
   if (window.lucide) lucide.createIcons();
 }
@@ -114,6 +116,8 @@ function renderShell(doctor) {
         <div class="skeleton skeleton-row"></div>
       </div>
     </div>
+
+    <div style="height:var(--space-12)"></div>
   `;
 }
 
