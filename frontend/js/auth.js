@@ -84,15 +84,60 @@ function render() {
 
           <div class="auth-field">
             <label class="auth-label">Contraseña</label>
-            <input
-              type="password"
-              id="field-password"
-              class="auth-input"
-              placeholder="${activeTab === "register" ? "Mínimo 6 caracteres" : "••••••••"}"
-              required
-              autocomplete="${activeTab === "register" ? "new-password" : "current-password"}"
-            />
+            <div class="${activeTab === "register" ? "pw-input-wrap" : ""}">
+              <input
+                type="password"
+                id="field-password"
+                class="auth-input"
+                placeholder="${activeTab === "register" ? "Crea una contraseña segura" : "••••••••"}"
+                required
+                autocomplete="${activeTab === "register" ? "new-password" : "current-password"}"
+                ${activeTab === "register" ? 'oninput="onPasswordInput()"' : ""}
+              />
+              ${activeTab === "register" ? `<button type="button" class="pw-eye-btn" onclick="togglePwVisibility('field-password', this)" aria-label="Mostrar contraseña" tabindex="-1">
+                <i data-lucide="eye" style="width:18px;height:18px"></i>
+              </button>` : ""}
+            </div>
           </div>
+
+          ${activeTab === "register" ? `
+          <div id="pw-requirements" class="pw-requirements">
+            <p class="pw-req-title">La contraseña debe tener:</p>
+            <ul class="pw-req-list">
+              <li class="pw-req" id="req-length">
+                <span class="pw-req-icon">○</span> Mínimo 8 caracteres
+              </li>
+              <li class="pw-req" id="req-upper">
+                <span class="pw-req-icon">○</span> Al menos una mayúscula
+              </li>
+              <li class="pw-req" id="req-lower">
+                <span class="pw-req-icon">○</span> Al menos una minúscula
+              </li>
+              <li class="pw-req" id="req-number">
+                <span class="pw-req-icon">○</span> Al menos un número
+              </li>
+            </ul>
+          </div>
+
+          <div class="auth-field">
+            <label class="auth-label">Confirmar contraseña</label>
+            <div class="pw-input-wrap">
+              <input
+                type="password"
+                id="field-confirm-password"
+                class="auth-input"
+                placeholder="Repite tu contraseña"
+                required
+                autocomplete="new-password"
+                oninput="onConfirmInput()"
+              />
+              <button type="button" class="pw-eye-btn" onclick="togglePwVisibility('field-confirm-password', this)" aria-label="Mostrar contraseña" tabindex="-1">
+                <i data-lucide="eye" style="width:18px;height:18px"></i>
+              </button>
+            </div>
+            <p id="confirm-error" class="pw-confirm-error" style="display:none">Las contraseñas no coinciden</p>
+          </div>
+          ` : ""}
 
           <button type="submit" class="auth-btn-primary" id="auth-submit">
             <span id="auth-submit-text">
@@ -123,6 +168,11 @@ function render() {
   `;
 
   if (window.lucide) lucide.createIcons();
+
+  if (activeTab === "register") {
+    const btn = document.getElementById("auth-submit");
+    if (btn) btn.disabled = true;
+  }
 }
 
 // ── Funciones globales (llamadas desde HTML inline) ───────────────────────
@@ -160,9 +210,77 @@ function setLoading(on) {
   if (on && window.lucide) lucide.createIcons();
 }
 
+// ── Password validation (register only) ───────────────────────────────────
+const PW_RULES = {
+  "req-length": (v) => v.length >= 8,
+  "req-upper":  (v) => /[A-Z]/.test(v),
+  "req-lower":  (v) => /[a-z]/.test(v),
+  "req-number": (v) => /[0-9]/.test(v),
+};
+
+function checkPasswordRules(value) {
+  let allOk = true;
+  for (const [id, test] of Object.entries(PW_RULES)) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    const ok = test(value);
+    if (!ok) allOk = false;
+    el.classList.toggle("pw-req--ok",   ok);
+    el.classList.toggle("pw-req--fail", !ok && value.length > 0);
+    el.querySelector(".pw-req-icon").textContent = ok ? "✓" : (value.length > 0 ? "✗" : "○");
+  }
+  return allOk;
+}
+
+function checkConfirmMatch() {
+  const pw  = document.getElementById("field-password")?.value ?? "";
+  const cpw = document.getElementById("field-confirm-password")?.value ?? "";
+  const errEl = document.getElementById("confirm-error");
+  const match = pw === cpw;
+  if (errEl) errEl.style.display = (!match && cpw.length > 0) ? "block" : "none";
+  return match && cpw.length > 0;
+}
+
+function updateSubmitState() {
+  const btn = document.getElementById("auth-submit");
+  if (!btn) return;
+  const pw = document.getElementById("field-password")?.value ?? "";
+  const rulesOk  = checkPasswordRules(pw);
+  const matchOk  = checkConfirmMatch();
+  btn.disabled = !(rulesOk && matchOk);
+}
+
+function togglePwVisibility(fieldId, btn) {
+  const input = document.getElementById(fieldId);
+  if (!input) return;
+  const show = input.type === "password";
+  input.type = show ? "text" : "password";
+  btn.innerHTML = show
+    ? `<i data-lucide="eye-off" style="width:18px;height:18px"></i>`
+    : `<i data-lucide="eye" style="width:18px;height:18px"></i>`;
+  btn.setAttribute("aria-label", show ? "Ocultar contraseña" : "Mostrar contraseña");
+  if (window.lucide) lucide.createIcons();
+}
+
+function onPasswordInput() {
+  updateSubmitState();
+}
+
+function onConfirmInput() {
+  updateSubmitState();
+}
+
 async function handleSubmit(e) {
   e.preventDefault();
   clearError();
+
+  if (activeTab === "register") {
+    const pw = document.getElementById("field-password")?.value ?? "";
+    const rulesOk = Object.values(PW_RULES).every((fn) => fn(pw));
+    const matchOk = checkConfirmMatch();
+    if (!rulesOk || !matchOk) return;
+  }
+
   setLoading(true);
 
   const email    = document.getElementById("field-email")?.value.trim();
