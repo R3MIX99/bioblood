@@ -9,7 +9,7 @@ const {
   createStudy,
   deleteStudy,
 } = require("../services/airtable");
-const { parseBloodStudy } = require("../services/anthropic");
+const { parseBloodStudy, summarizeStudies } = require("../services/anthropic");
 
 // ── GET /studies?patientId=xxx ────────────────────────────────────────────────
 // Lista estudios de un paciente verificando ownership.
@@ -83,6 +83,37 @@ router.post("/", requireAuth, async (req, res) => {
   } catch (err) {
     console.error("POST /studies createStudy:", err.message);
     res.status(500).json({ error: err.message || "Error al guardar el estudio" });
+  }
+});
+
+// ── POST /studies/summary ─────────────────────────────────────────────────────
+// Genera un resumen IA de todos los estudios de un paciente.
+router.post("/summary", requireAuth, async (req, res) => {
+  const { patientId } = req.body;
+  if (!patientId) return res.status(400).json({ error: "patientId es requerido" });
+
+  const patient = await getPatient(patientId, req.doctor.id);
+  if (!patient) return res.status(404).json({ error: "Paciente no encontrado" });
+
+  try {
+    const studies = await listStudies(patientId);
+    if (!studies || studies.length === 0) {
+      return res.status(422).json({ error: "El paciente no tiene estudios" });
+    }
+
+    // listStudies ya devuelve components como array parseado (ver toStudy en airtable.js)
+    const studiesData = studies.map(s => ({
+      id:         s.id,
+      fecha:      s.fecha,
+      labName:    s.labName,
+      components: s.components || [],
+    }));
+
+    const summary = await summarizeStudies(studiesData);
+    res.json({ summary });
+  } catch (err) {
+    console.error("POST /studies/summary:", err.message);
+    res.status(500).json({ error: err.message || "Error al generar el resumen" });
   }
 });
 

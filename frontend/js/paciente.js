@@ -111,6 +111,11 @@ async function uploadStudy(file) {
     state.studies.unshift(study);
     state.expandedId = study.id;
     state.uploading  = false;
+    // Invalidar caché del resumen IA para que se regenere con el nuevo estudio
+    _aiSummaryState.text           = null;
+    _aiSummaryState.error          = null;
+    _aiSummaryState.loading        = false;
+    _aiSummaryState.loadedForCount = null;
     render();
     showToast("Estudio analizado y guardado.", "success");
 
@@ -161,7 +166,10 @@ function render() {
       <div id="patient-header" style="margin-bottom:var(--space-6)"></div>
 
       <!-- Subida de PDF -->
-      <div id="upload-section" style="margin-bottom:var(--space-8)"></div>
+      <div id="upload-section" style="margin-bottom:var(--space-6)"></div>
+
+      <!-- Resumen IA -->
+      <div id="ai-summary-section" style="margin-bottom:var(--space-8)"></div>
 
       <!-- Lista de estudios -->
       <div id="studies-section"></div>
@@ -180,6 +188,7 @@ function render() {
   } else {
     renderPatientHeader();
     renderUploadSection();
+    renderAiSummary();
     renderStudiesSection();
   }
   if (window.lucide) lucide.createIcons();
@@ -386,6 +395,154 @@ function renderUploadSection() {
            style="display:none" onchange="onFileInput(this.files[0])" />`;
 
   if (window.lucide) lucide.createIcons();
+}
+
+// ── Resumen IA ────────────────────────────────────────────────────────────────
+const _aiSummaryState = { text: null, loading: false, error: null, loadedForCount: null };
+
+function renderAiSummary() {
+  const el = document.getElementById("ai-summary-section");
+  if (!el || state.loading) return;
+
+  // Ocultar si no hay estudios
+  if (state.studies.length === 0) {
+    el.innerHTML = "";
+    return;
+  }
+
+  // Si ya tenemos el resumen cargado para el mismo número de estudios, solo renderizarlo
+  if (_aiSummaryState.text !== null && _aiSummaryState.loadedForCount === state.studies.length) {
+    el.innerHTML = buildAiSummaryHtml(_aiSummaryState.text);
+    if (window.lucide) lucide.createIcons();
+    return;
+  }
+
+  // Si hay error previo, mostrar con opción de reintentar
+  if (_aiSummaryState.error && _aiSummaryState.loadedForCount === state.studies.length) {
+    el.innerHTML = `
+      <div class="card" style="border-left:3px solid var(--yellow)">
+        <div style="display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-3)">
+          <i data-lucide="bot" class="icon icon-md" style="color:var(--text-muted)" aria-hidden="true"></i>
+          <span style="font-weight:700;font-size:var(--fs-body);color:var(--text)">Resumen IA</span>
+          <span style="font-size:var(--fs-xs);color:var(--text-muted);padding:2px 8px;
+                       background:var(--surface-2);border-radius:999px">Generado con IA</span>
+        </div>
+        <p style="font-size:var(--fs-sm);color:var(--text-muted);margin-bottom:var(--space-3)">
+          ${escHtml(_aiSummaryState.error)}
+        </p>
+        <button class="btn-ghost" onclick="refreshAiSummary()">
+          <i data-lucide="refresh-cw" class="icon icon-sm" aria-hidden="true"></i>
+          Reintentar
+        </button>
+      </div>`;
+    if (window.lucide) lucide.createIcons();
+    return;
+  }
+
+  // Estado de carga
+  el.innerHTML = `
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-3)">
+        <i data-lucide="loader-2" class="icon icon-md spin"
+           style="color:var(--crimson)" aria-hidden="true"></i>
+        <span style="font-weight:700;font-size:var(--fs-body);color:var(--text)">
+          Generando resumen de estudios...
+        </span>
+        <span style="font-size:var(--fs-xs);color:var(--text-muted);padding:2px 8px;
+                     background:var(--surface-2);border-radius:999px">Generado con IA</span>
+      </div>
+      <div class="skeleton skeleton-text" style="width:90%"></div>
+      <div class="skeleton skeleton-text" style="width:75%;margin-top:8px"></div>
+      <div class="skeleton skeleton-text" style="width:85%;margin-top:8px"></div>
+    </div>`;
+  if (window.lucide) lucide.createIcons();
+
+  // Cargar resumen si no está en progreso
+  if (!_aiSummaryState.loading) {
+    _aiSummaryState.loading = true;
+    _aiSummaryState.error   = null;
+    const countAtLoad = state.studies.length;
+
+    apiFetch("/studies/summary", {
+      method: "POST",
+      body:   JSON.stringify({ patientId: state.patientId }),
+    }).then(async res => {
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Error ${res.status}`);
+      }
+      return res.json();
+    }).then(data => {
+      _aiSummaryState.text            = data.summary;
+      _aiSummaryState.loadedForCount  = countAtLoad;
+      _aiSummaryState.loading         = false;
+      const el2 = document.getElementById("ai-summary-section");
+      if (el2) {
+        el2.innerHTML = buildAiSummaryHtml(data.summary);
+        if (window.lucide) lucide.createIcons();
+      }
+    }).catch(err => {
+      _aiSummaryState.error           = err.message || "No se pudo generar el resumen.";
+      _aiSummaryState.loadedForCount  = countAtLoad;
+      _aiSummaryState.loading         = false;
+      renderAiSummary();
+    });
+  }
+}
+
+function refreshAiSummary() {
+  _aiSummaryState.text    = null;
+  _aiSummaryState.error   = null;
+  _aiSummaryState.loading = false;
+  _aiSummaryState.loadedForCount = null;
+  renderAiSummary();
+}
+
+function buildAiSummaryHtml(text) {
+  const escaped = text
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  // Split into lines, render bullet lines as <li>, rest as plain text
+  const items = escaped.split("\n")
+    .map(line => line.trim())
+    .filter(Boolean)
+    .map(line => {
+      const isBullet = line.startsWith("•") || line.startsWith("-");
+      const content  = line.replace(/^[•\-]\s*/, "")
+        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+        .replace(/↑/g, '<span style="color:var(--red)">↑</span>')
+        .replace(/↓/g, '<span style="color:var(--amber)">↓</span>');
+      return isBullet
+        ? `<li style="margin-bottom:var(--space-2);line-height:1.55">${content}</li>`
+        : `<p style="margin:0 0 var(--space-2)">${content}</p>`;
+    });
+
+  const body = items.some(l => l.startsWith("<li"))
+    ? `<ul style="margin:0;padding-left:var(--space-5);list-style:disc">${items.join("")}</ul>`
+    : items.join("");
+
+  return `
+    <div class="card" style="border-left:3px solid var(--crimson)">
+      <div style="display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-4)">
+        <i data-lucide="bot" class="icon icon-md" style="color:var(--crimson)" aria-hidden="true"></i>
+        <span style="font-weight:700;font-size:var(--fs-body);color:var(--text)">Resumen de estudios</span>
+        <span style="font-size:var(--fs-xs);color:var(--crimson);padding:2px 8px;
+                     background:var(--crimson-50);border-radius:999px;font-weight:600">
+          ✦ Generado con IA
+        </span>
+        <button class="btn-icon" style="margin-left:auto" title="Actualizar resumen"
+                onclick="refreshAiSummary()">
+          <i data-lucide="refresh-cw" class="icon icon-sm" aria-hidden="true"></i>
+        </button>
+      </div>
+      <div style="font-size:var(--fs-sm);color:var(--text)">
+        ${body}
+      </div>
+      <p style="font-size:var(--fs-xs);color:var(--text-muted);margin-top:var(--space-4);
+                padding-top:var(--space-3);border-top:1px solid var(--border)">
+        Generado automáticamente a partir de los datos extraídos del estudio. No constituye consejo médico.
+      </p>
+    </div>`;
 }
 
 // ── Seccion de estudios ───────────────────────────────────────────────────────

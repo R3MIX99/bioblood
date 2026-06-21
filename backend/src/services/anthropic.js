@@ -160,4 +160,65 @@ IMPORTANTE: Incluye TODOS los nombres de la lista, incluso los que no tienen var
   }
 }
 
-module.exports = { parseBloodStudy, buildCanonicalMap };
+// ── summarizeStudies ───────────────────────────────────────────────────────
+
+/**
+ * Genera un resumen objetivo de uno o varios estudios de sangre.
+ * @param {Array} studies - Array de { id, fecha, labName, components: [{name,value,unit,lowerLimit,upperLimit,status}] }
+ * @returns {string} Resumen en texto/markdown
+ */
+async function summarizeStudies(studies) {
+  if (!studies || studies.length === 0) throw new Error("Sin estudios para resumir");
+
+  const studiesBlocks = studies.map((s) => {
+    const dateLabel = s.fecha    ? ` — ${s.fecha}` : "";
+    const labLabel  = s.labName  ? ` (${s.labName})` : "";
+    const header    = `Patient Study Results${dateLabel}${labLabel}`;
+
+    // Filter out components with null/undefined value, then format each line
+    const lines = (s.components || [])
+      .filter(c => c.value != null && c.name)
+      .map(c => {
+        const ref = (c.lowerLimit != null && c.upperLimit != null)
+          ? ` (ref: ${c.lowerLimit}–${c.upperLimit} ${c.unit ?? ""})`
+          : "";
+        const unit   = c.unit  ?? "";
+        const status = c.status && c.status !== "desconocido" ? ` [${c.status.toUpperCase()}]` : "";
+        return `- ${c.name}: ${c.value} ${unit}${ref}${status}`.trim();
+      });
+
+    if (lines.length === 0) return null;
+    return `${header}\n${lines.join("\n")}`;
+  }).filter(Boolean);
+
+  if (studiesBlocks.length === 0) throw new Error("Los estudios no contienen componentes con valores");
+
+  const structuredContext = studiesBlocks.join("\n\n");
+
+  const msg = await client.messages.create({
+    model:      MODEL,
+    max_tokens: 800,
+    messages: [{
+      role: "user",
+      content: `You are a clinical assistant summarizing a patient's lab study results.
+Below are the extracted and structured results from the study. Do NOT say data is missing — if a value is not present in the list, simply omit it from the summary.
+
+${structuredContext}
+
+Respond in Spanish with a bullet-point list of the most relevant findings. Each bullet must be a single, factual statement. Rules:
+- Use "•" as the bullet character.
+- Flag values outside the reference range with their exact value and direction (↑ alto / ↓ bajo).
+- If there are multiple studies with dates, flag trends: values that improved, worsened, or stayed abnormal over time.
+- Only include normal values if they are part of a meaningful pattern.
+- Do not include an intro sentence, conclusion, or headings — only the bullet list.
+- Do not mention missing data.
+- Aim for 4–8 bullets covering only the most relevant facts.`,
+    }],
+  });
+
+  const text = msg.content?.find((b) => b.type === "text")?.text || "";
+  if (!text) throw new Error("La API no devolvió contenido");
+  return text;
+}
+
+module.exports = { parseBloodStudy, buildCanonicalMap, summarizeStudies };

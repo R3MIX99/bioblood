@@ -17,10 +17,14 @@ function resolveReturnTo() {
 }
 
 // ── Estado ────────────────────────────────────────────────────────────────
-let activeTab = "login"; // "login" | "register"
+let activeTab    = "login"; // "login" | "register"
+let activeScreen = "auth";  // "auth" | "forgot-email" | "forgot-code" | "forgot-reset"
+let forgotEmail  = "";      // persisted across forgot screens
 
 // ── Render ────────────────────────────────────────────────────────────────
 function render() {
+  if (activeScreen !== "auth") { renderForgot(); return; }
+
   const root = document.getElementById("login-root");
   if (!root) return;
 
@@ -145,6 +149,16 @@ function render() {
             </span>
             <i data-lucide="loader-2" class="icon spin" id="auth-spinner" style="display:none;width:16px;height:16px"></i>
           </button>
+
+          ${activeTab === "login" ? `
+          <div style="text-align:center;margin-top:var(--space-4)">
+            <button type="button"
+              onclick="goForgot()"
+              style="background:none;border:none;cursor:pointer;font-size:var(--fs-sm);
+                     color:var(--text-muted);text-decoration:underline;padding:0">
+              Olvidé mi contraseña
+            </button>
+          </div>` : ""}
         </form>
 
         <!-- Divisor -->
@@ -312,6 +326,286 @@ async function handleSubmit(e) {
 
 function loginWithGoogle() {
   window.location.href = `${API_URL}/auth/google`;
+}
+
+// ── Forgot password ───────────────────────────────────────────────────────
+
+function goForgot() {
+  activeScreen = "forgot-email";
+  forgotEmail  = "";
+  render();
+}
+
+function backToLogin() {
+  activeScreen = "auth";
+  activeTab    = "login";
+  render();
+}
+
+function renderForgot() {
+  const root = document.getElementById("login-root");
+  if (!root) return;
+
+  const logoHtml = `
+    <div class="auth-logo">
+      <div class="auth-logo-icon">
+        <i data-lucide="droplet" class="icon" style="width:28px;height:28px;color:#C0392B;stroke-width:1.75"></i>
+      </div>
+      <div>
+        <h1 class="auth-brand">BioBlood</h1>
+        <p class="auth-brand-sub">ANÁLISIS CLÍNICOS</p>
+      </div>
+    </div>`;
+
+  const backBtn = `
+    <button type="button" onclick="backToLogin()"
+      style="background:none;border:none;cursor:pointer;display:inline-flex;align-items:center;
+             gap:6px;font-size:var(--fs-sm);color:var(--text-muted);padding:0;margin-bottom:var(--space-6)">
+      <i data-lucide="arrow-left" style="width:15px;height:15px"></i> Volver al inicio de sesión
+    </button>`;
+
+  if (activeScreen === "forgot-email") {
+    root.innerHTML = `
+      <div class="auth-wrapper">
+        <div class="auth-card">
+          ${logoHtml}
+          ${backBtn}
+          <h2 style="font-size:var(--fs-h2);font-family:var(--font-display);color:var(--text);
+                     margin:0 0 var(--space-2)">Recuperar contraseña</h2>
+          <p style="font-size:var(--fs-sm);color:var(--text-muted);margin:0 0 var(--space-6)">
+            Ingresa tu correo y te enviaremos un código de verificación.
+          </p>
+          <div id="auth-error" class="auth-error" style="display:none"></div>
+          <form onsubmit="handleForgotEmail(event)">
+            <div class="auth-field">
+              <label class="auth-label">Correo electrónico</label>
+              <input type="email" id="forgot-email-input" class="auth-input"
+                     placeholder="doctor@ejemplo.com" required autocomplete="email"
+                     value="${forgotEmail}" />
+            </div>
+            <button type="submit" class="auth-btn-primary" id="auth-submit">
+              <span id="auth-submit-text">Enviar código</span>
+              <i data-lucide="loader-2" class="icon spin" id="auth-spinner" style="display:none;width:16px;height:16px"></i>
+            </button>
+          </form>
+        </div>
+      </div>`;
+
+  } else if (activeScreen === "forgot-code") {
+    root.innerHTML = `
+      <div class="auth-wrapper">
+        <div class="auth-card">
+          ${logoHtml}
+          ${backBtn}
+          <h2 style="font-size:var(--fs-h2);font-family:var(--font-display);color:var(--text);
+                     margin:0 0 var(--space-2)">Ingresa el código</h2>
+          <p style="font-size:var(--fs-sm);color:var(--text-muted);margin:0 0 var(--space-6)">
+            Enviamos un código de 6 dígitos a <strong>${forgotEmail}</strong>. Válido por 15 minutos.
+          </p>
+          <div id="auth-error" class="auth-error" style="display:none"></div>
+          <form onsubmit="handleForgotCode(event)">
+            <div class="auth-field">
+              <label class="auth-label">Código de verificación</label>
+              <input type="text" id="forgot-code-input" class="auth-input"
+                     placeholder="000000" required maxlength="6"
+                     style="letter-spacing:6px;font-size:22px;text-align:center"
+                     autocomplete="one-time-code" inputmode="numeric" />
+            </div>
+            <button type="submit" class="auth-btn-primary" id="auth-submit">
+              <span id="auth-submit-text">Verificar código</span>
+              <i data-lucide="loader-2" class="icon spin" id="auth-spinner" style="display:none;width:16px;height:16px"></i>
+            </button>
+          </form>
+          <div style="text-align:center;margin-top:var(--space-4)">
+            <button type="button" onclick="handleForgotResend()"
+              style="background:none;border:none;cursor:pointer;font-size:var(--fs-sm);
+                     color:var(--text-muted);text-decoration:underline;padding:0">
+              Reenviar código
+            </button>
+          </div>
+        </div>
+      </div>`;
+
+  } else if (activeScreen === "forgot-reset") {
+    root.innerHTML = `
+      <div class="auth-wrapper">
+        <div class="auth-card">
+          ${logoHtml}
+          ${backBtn}
+          <h2 style="font-size:var(--fs-h2);font-family:var(--font-display);color:var(--text);
+                     margin:0 0 var(--space-2)">Nueva contraseña</h2>
+          <p style="font-size:var(--fs-sm);color:var(--text-muted);margin:0 0 var(--space-6)">
+            Crea una nueva contraseña para tu cuenta.
+          </p>
+          <div id="auth-error" class="auth-error" style="display:none"></div>
+          <form onsubmit="handleForgotReset(event)">
+            <div class="auth-field">
+              <label class="auth-label">Nueva contraseña</label>
+              <div class="pw-input-wrap">
+                <input type="password" id="reset-password" class="auth-input"
+                       placeholder="Crea una contraseña segura" required
+                       autocomplete="new-password" oninput="onResetPwInput()" />
+                <button type="button" class="pw-eye-btn"
+                        onclick="togglePwVisibility('reset-password', this)"
+                        aria-label="Mostrar contraseña" tabindex="-1">
+                  <i data-lucide="eye" style="width:18px;height:18px"></i>
+                </button>
+              </div>
+            </div>
+
+            <div id="pw-requirements" class="pw-requirements">
+              <p class="pw-req-title">La contraseña debe tener:</p>
+              <ul class="pw-req-list">
+                <li class="pw-req" id="req-length"><span class="pw-req-icon">○</span> Mínimo 8 caracteres</li>
+                <li class="pw-req" id="req-upper"><span class="pw-req-icon">○</span> Al menos una mayúscula</li>
+                <li class="pw-req" id="req-lower"><span class="pw-req-icon">○</span> Al menos una minúscula</li>
+                <li class="pw-req" id="req-number"><span class="pw-req-icon">○</span> Al menos un número</li>
+              </ul>
+            </div>
+
+            <div class="auth-field">
+              <label class="auth-label">Confirmar contraseña</label>
+              <div class="pw-input-wrap">
+                <input type="password" id="reset-confirm" class="auth-input"
+                       placeholder="Repite tu contraseña" required
+                       autocomplete="new-password" oninput="onResetConfirmInput()" />
+                <button type="button" class="pw-eye-btn"
+                        onclick="togglePwVisibility('reset-confirm', this)"
+                        aria-label="Mostrar contraseña" tabindex="-1">
+                  <i data-lucide="eye" style="width:18px;height:18px"></i>
+                </button>
+              </div>
+              <p id="confirm-error" class="pw-confirm-error" style="display:none">Las contraseñas no coinciden</p>
+            </div>
+
+            <button type="submit" class="auth-btn-primary" id="auth-submit" disabled>
+              <span id="auth-submit-text">Guardar contraseña</span>
+              <i data-lucide="loader-2" class="icon spin" id="auth-spinner" style="display:none;width:16px;height:16px"></i>
+            </button>
+          </form>
+        </div>
+      </div>`;
+  }
+
+  if (window.lucide) lucide.createIcons();
+  setTimeout(() => { const f = document.querySelector(".auth-input"); if (f) f.focus(); }, 50);
+}
+
+async function handleForgotEmail(e) {
+  e.preventDefault();
+  clearError();
+  const email = document.getElementById("forgot-email-input")?.value.trim();
+  if (!email) return;
+  forgotEmail = email;
+  setLoading(true);
+  try {
+    const res = await apiFetch("/auth/forgot-password", { method: "POST", body: JSON.stringify({ email }) });
+    const data = await res.json();
+    if (!res.ok) { showError(data.error || "Error al enviar el código"); setLoading(false); return; }
+    activeScreen = "forgot-code";
+    render();
+  } catch {
+    showError("Error de conexión."); setLoading(false);
+  }
+}
+
+async function handleForgotCode(e) {
+  e.preventDefault();
+  clearError();
+  const code = document.getElementById("forgot-code-input")?.value.trim();
+  if (!code) return;
+  // Store code temporarily on state to pass to reset step
+  window._resetCode = code;
+  activeScreen = "forgot-reset";
+  render();
+}
+
+async function handleForgotResend() {
+  clearError();
+  setLoading(true);
+  try {
+    const res  = await apiFetch("/auth/forgot-password", { method: "POST", body: JSON.stringify({ email: forgotEmail }) });
+    const data = await res.json();
+    setLoading(false);
+    if (!res.ok) { showError(data.error || "Error al reenviar"); return; }
+    showForgotSuccess("Código reenviado. Revisa tu bandeja de entrada.");
+  } catch {
+    showError("Error de conexión."); setLoading(false);
+  }
+}
+
+function showForgotSuccess(msg) {
+  const el = document.getElementById("auth-error");
+  if (!el) return;
+  el.textContent  = msg;
+  el.style.display = "block";
+  el.style.background = "var(--green-50, #f0fdf4)";
+  el.style.borderColor = "var(--green, #27ae60)";
+  el.style.color       = "var(--green, #27ae60)";
+}
+
+async function handleForgotReset(e) {
+  e.preventDefault();
+  clearError();
+  const password = document.getElementById("reset-password")?.value ?? "";
+  const confirm  = document.getElementById("reset-confirm")?.value ?? "";
+  const rulesOk  = Object.values(PW_RULES).every((fn) => fn(password));
+  const matchOk  = password === confirm && confirm.length > 0;
+  if (!rulesOk || !matchOk) return;
+
+  setLoading(true);
+  try {
+    const res = await apiFetch("/auth/reset-password", {
+      method: "POST",
+      body:   JSON.stringify({ email: forgotEmail, code: window._resetCode, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      // Code was wrong — send back to code step
+      if (data.error?.includes("Código") || data.error?.includes("expiró") || data.error?.includes("intentos")) {
+        activeScreen = "forgot-code";
+        render();
+        showError(data.error);
+      } else {
+        showError(data.error || "Error al cambiar la contraseña");
+      }
+      setLoading(false);
+      return;
+    }
+    // Success — go to login with success message
+    delete window._resetCode;
+    activeScreen = "auth";
+    activeTab    = "login";
+    render();
+    setTimeout(() => showForgotSuccess("Contraseña actualizada. Ya puedes iniciar sesión."), 50);
+  } catch {
+    showError("Error de conexión."); setLoading(false);
+  }
+}
+
+function onResetPwInput() {
+  const pw  = document.getElementById("reset-password")?.value ?? "";
+  const btn = document.getElementById("auth-submit");
+  checkPasswordRules(pw);
+  const rulesOk = Object.values(PW_RULES).every((fn) => fn(pw));
+  const conf    = document.getElementById("reset-confirm")?.value ?? "";
+  const matchOk = pw === conf && conf.length > 0;
+  if (btn) btn.disabled = !(rulesOk && matchOk);
+  if (conf.length > 0) {
+    const errEl = document.getElementById("confirm-error");
+    if (errEl) errEl.style.display = pw !== conf ? "block" : "none";
+  }
+}
+
+function onResetConfirmInput() {
+  const pw   = document.getElementById("reset-password")?.value ?? "";
+  const conf = document.getElementById("reset-confirm")?.value ?? "";
+  const btn  = document.getElementById("auth-submit");
+  const errEl = document.getElementById("confirm-error");
+  const matchOk = pw === conf && conf.length > 0;
+  if (errEl) errEl.style.display = (!matchOk && conf.length > 0) ? "block" : "none";
+  const rulesOk = Object.values(PW_RULES).every((fn) => fn(pw));
+  if (btn) btn.disabled = !(rulesOk && matchOk);
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────
