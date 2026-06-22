@@ -8,7 +8,7 @@ const _chartInstances = [];
  * @param {Object[]} studies    - lista de estudios con .components[]
  * @param {string}   containerId - ID del elemento DOM donde renderizar
  */
-function renderGraficas(studies, containerId) {
+function renderGraficas(studies, containerId, patientName) {
   // Destruir instancias previas para evitar memory leaks
   _chartInstances.forEach(c => { try { c.destroy(); } catch (_) {} });
   _chartInstances.length = 0;
@@ -74,7 +74,7 @@ function renderGraficas(studies, containerId) {
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));
                 gap:var(--space-5)">
-      ${components.map((comp, i) => chartCard(comp, i)).join("")}
+      ${components.map((comp, i) => chartCard(comp, i, patientName || "")).join("")}
     </div>`;
 
   if (window.lucide) lucide.createIcons();
@@ -96,7 +96,7 @@ function legendDot(color, label) {
   </span>`;
 }
 
-function chartCard(comp, i) {
+function chartCard(comp, i, patientName) {
   return `
     <div class="card" style="padding:20px;overflow:hidden">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;
@@ -116,7 +116,8 @@ function chartCard(comp, i) {
           aria-label="Descargar gráfica"
           data-chart="grafica-${i}"
           data-name="${escHtml(comp.displayName)}"
-          onclick="downloadChart(this.dataset.chart, this.dataset.name)"
+          data-patient="${escHtml(patientName)}"
+          onclick="downloadChart(this.dataset.chart, this.dataset.name, this.dataset.patient)"
           style="flex-shrink:0"
         >
           <i data-lucide="download" class="icon icon-md" aria-hidden="true"></i>
@@ -229,21 +230,68 @@ function createTrendChart(canvasId, comp) {
 
 // ── Descarga PNG ─────────────────────────────────────────────────────────────
 
-function downloadChart(canvasId, name) {
+function downloadChart(canvasId, componentName, patientName) {
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
 
-  // Compositar sobre fondo blanco (canvas de Chart.js es transparente)
-  const tmp       = document.createElement("canvas");
-  tmp.width       = canvas.width;
-  tmp.height      = canvas.height;
-  const ctx       = tmp.getContext("2d");
-  ctx.fillStyle   = "#ffffff";
+  const HEADER_H  = 72;
+  const PAD       = 16;
+  const W         = canvas.width;
+  const H         = canvas.height;
+
+  const tmp     = document.createElement("canvas");
+  tmp.width     = W;
+  tmp.height    = H + HEADER_H;
+  const ctx     = tmp.getContext("2d");
+
+  // White background
+  ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, tmp.width, tmp.height);
-  ctx.drawImage(canvas, 0, 0);
+
+  // Bottom border on header area
+  ctx.strokeStyle = "#e8eaed";
+  ctx.lineWidth   = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, HEADER_H);
+  ctx.lineTo(W, HEADER_H);
+  ctx.stroke();
+
+  // BioBlood brand dot
+  ctx.fillStyle = "#C0392B";
+  ctx.beginPath();
+  ctx.arc(PAD + 6, HEADER_H / 2, 6, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Component name (large, bold)
+  ctx.fillStyle = "#111318";
+  ctx.font      = `700 15px Inter, -apple-system, sans-serif`;
+  ctx.fillText(componentName || "Gráfica", PAD + 20, HEADER_H / 2 - 7);
+
+  // Patient name
+  ctx.fillStyle = "#636B78";
+  ctx.font      = `500 11px Inter, -apple-system, sans-serif`;
+  ctx.fillText(patientName ? `Paciente: ${patientName}` : "", PAD + 20, HEADER_H / 2 + 11);
+
+  // Download date (right-aligned)
+  const dateStr = new Date().toLocaleDateString("es-MX", { year: "numeric", month: "long", day: "numeric" });
+  ctx.fillStyle = "#9BA3AE";
+  ctx.font      = `400 10px Inter, -apple-system, sans-serif`;
+  ctx.textAlign = "right";
+  ctx.fillText(dateStr, W - PAD, HEADER_H / 2 + 4);
+  ctx.textAlign = "left";
+
+  // Chart (with white background)
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, HEADER_H, W, H);
+  ctx.drawImage(canvas, 0, HEADER_H);
+
+  // Filename: NombrePaciente_NombreComponente_YYYY-MM-DD.png
+  const slug = (s) => (s || "").replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_\-]/g, "");
+  const dateSlug = new Date().toISOString().slice(0, 10);
+  const filename = [slug(patientName), slug(componentName), dateSlug].filter(Boolean).join("_") + ".png";
 
   const link    = document.createElement("a");
-  link.download = `${(name || "grafica").replace(/[^a-z0-9_\-]/gi, "_")}.png`;
+  link.download = filename;
   link.href     = tmp.toDataURL("image/png");
   link.click();
 }

@@ -105,31 +105,55 @@ function buildPivotData(studies) {
     return a.fecha.localeCompare(b.fecha);
   });
 
-  // Recopilar nombres únicos de componentes (normalizado → metadatos)
-  const seen = new Map();
+  // Clave de fila: nombre normalizado + unidad + lowerLimit + upperLimit
+  // Componentes del mismo nombre pero diferente unidad o límites → filas separadas
+  const rowMap = new Map(); // key → { displayName, unit, lower, upper, cells[] }
+
   for (const study of sorted) {
     for (const comp of (study.components || [])) {
-      const norm = localNormalize(comp.name);
-      if (!seen.has(norm)) seen.set(norm, { displayName: comp.name, unit: comp.unit || "" });
+      const norm  = localNormalize(comp.name);
+      const unit  = comp.unit        ?? "";
+      const lower = comp.lowerLimit  ?? null;
+      const upper = comp.upperLimit  ?? null;
+      const key   = `${norm}||${unit}||${lower}||${upper}`;
+
+      if (!rowMap.has(key)) {
+        rowMap.set(key, {
+          norm,
+          displayName: comp.name,
+          unit,
+          lower,
+          upper,
+          // inicializar todas las celdas en null
+          cells: sorted.map(() => null),
+        });
+      }
     }
   }
 
-  // Construir filas: una por componente
-  const rows = [...seen.entries()].map(([norm, meta]) => ({
-    displayName: meta.displayName,
-    unit: meta.unit,
-    cells: sorted.map(study => {
-      const comp = (study.components || []).find(c => localNormalize(c.name) === norm);
-      return comp ? { value: comp.value, unit: comp.unit, status: comp.status } : null;
-    }),
-  }));
+  // Rellenar celdas de cada fila
+  for (let si = 0; si < sorted.length; si++) {
+    const study = sorted[si];
+    for (const comp of (study.components || [])) {
+      const norm  = localNormalize(comp.name);
+      const unit  = comp.unit       ?? "";
+      const lower = comp.lowerLimit ?? null;
+      const upper = comp.upperLimit ?? null;
+      const key   = `${norm}||${unit}||${lower}||${upper}`;
+      const row   = rowMap.get(key);
+      if (row) row.cells[si] = { value: comp.value, status: comp.status };
+    }
+  }
 
-  // Ordenar: primero los que aparecen en más estudios, luego alfabético
+  const rows = [...rowMap.values()];
+
+  // Ordenar: mismo nombre agrupado y contiguo, dentro del grupo más relleno primero
   rows.sort((a, b) => {
+    const nameComp = a.norm.localeCompare(b.norm, "es");
+    if (nameComp !== 0) return nameComp;
     const aFill = a.cells.filter(Boolean).length;
     const bFill = b.cells.filter(Boolean).length;
-    if (bFill !== aFill) return bFill - aFill;
-    return a.displayName.localeCompare(b.displayName, "es");
+    return bFill - aFill;
   });
 
   return { studies: sorted, rows };
@@ -156,6 +180,10 @@ function renderPivotTable(studies, containerId) {
     `<th>${escHtml(formatDate(s.fecha))}</th>`
   ).join("");
 
+  // Detectar qué nombres de componente tienen más de una variante (distintos límites/unidad)
+  const normCounts = new Map();
+  for (const row of rows) normCounts.set(row.norm, (normCounts.get(row.norm) || 0) + 1);
+
   // Filas del cuerpo
   const bodyRows = rows.map(row => {
     const statuses = row.cells.filter(Boolean).map(c => (c.status || "nd").toLowerCase());
@@ -165,7 +193,7 @@ function renderPivotTable(studies, containerId) {
     else if (statuses.length && statuses.every(s => s === "normal")) rowClass = "row-status-normal";
 
     const cells = row.cells.map(cell => {
-      if (!cell) return `<td class="pivot-cell-empty" style="text-align:center">—</td>`;
+      if (!cell) return `<td class="pivot-cell-empty" style="text-align:center;color:var(--text-light);font-size:var(--fs-xs)">NA</td>`;
       const s = (cell.status || "nd").toLowerCase();
       const cls = s === "alto" ? "pivot-cell-alto"
         : s === "bajo"   ? "pivot-cell-bajo"
@@ -176,10 +204,37 @@ function renderPivotTable(studies, containerId) {
       </td>`;
     }).join("");
 
+    // Columna de rango
+    const hasLower = row.lower != null;
+    const hasUpper = row.upper != null;
+    let rangeCell = `<td style="text-align:center;color:var(--text-light);font-size:var(--fs-xs)">—</td>`;
+    if (hasLower && hasUpper) {
+      rangeCell = `<td style="text-align:center;white-space:nowrap;font-size:var(--fs-xs);color:var(--text-muted)">
+        ${row.lower} – ${row.upper} <span style="color:var(--text-light)">${escHtml(row.unit)}</span>
+      </td>`;
+    } else if (hasUpper) {
+      rangeCell = `<td style="text-align:center;white-space:nowrap;font-size:var(--fs-xs);color:var(--text-muted)">
+        &lt; ${row.upper} <span style="color:var(--text-light)">${escHtml(row.unit)}</span>
+      </td>`;
+    } else if (hasLower) {
+      rangeCell = `<td style="text-align:center;white-space:nowrap;font-size:var(--fs-xs);color:var(--text-muted)">
+        &gt; ${row.lower} <span style="color:var(--text-light)">${escHtml(row.unit)}</span>
+      </td>`;
+    }
+
+    // Si el componente tiene variantes, añadir sub-label con los límites para distinguirlas
+    const hasVariants = normCounts.get(row.norm) > 1;
+    const nameHtml = hasVariants
+      ? `${escHtml(row.displayName)}<br><span style="font-size:10px;color:var(--text-light);font-weight:400">
+           ref. ${row.lower ?? "?"} – ${row.upper ?? "?"} ${escHtml(row.unit)}
+         </span>`
+      : escHtml(row.displayName);
+
     return `<tr class="${rowClass}">
-      <td>${escHtml(row.displayName)}</td>
+      <td>${nameHtml}</td>
       <td style="text-align:center;color:var(--text-muted)">${escHtml(row.unit)}</td>
       ${cells}
+      ${rangeCell}
     </tr>`;
   }).join("");
 
@@ -214,11 +269,13 @@ function renderPivotTable(studies, containerId) {
               <th style="text-align:left">Componente</th>
               <th style="text-align:center">Unidad</th>
               ${labHeaders}
+              <th style="text-align:center">Rango de referencia</th>
             </tr>
             <tr>
               <th></th>
               <th></th>
               ${dateHeaders}
+              <th></th>
             </tr>
           </thead>
           <tbody>${bodyRows}</tbody>

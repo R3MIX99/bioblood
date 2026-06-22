@@ -621,7 +621,7 @@ function renderStudiesSection() {
 
   renderStudiesList();
   renderPivotTable(state.studies, "pivot-section");
-  renderGraficas(state.studies, "graficas-section");
+  renderGraficas(state.studies, "graficas-section", state.patient?.nombre || "");
 }
 
 function renderStudiesList() {
