@@ -1274,6 +1274,88 @@
   color: var(--text-muted);
 }
 
+/* ── Password eye toggle ───────────────────────────────────── */
+.pw-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.pw-input-wrap .form-input {
+  padding-right: 44px;
+}
+
+.pw-eye-btn {
+  position: absolute;
+  right: 12px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  transition: color 150ms ease;
+}
+
+.pw-eye-btn:hover { color: var(--text); }
+
+/* ── Password requirements ────────────────────────────────── */
+.pw-requirements {
+  background: var(--surface-tint);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  margin-bottom: var(--space-4);
+}
+
+.pw-req-title {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 0 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pw-req-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.pw-req {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  transition: color 150ms ease;
+}
+
+.pw-req-icon {
+  font-size: 13px;
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+  transition: color 150ms ease;
+}
+
+.pw-req--ok   { color: var(--text); }
+.pw-req--ok .pw-req-icon   { color: #27ae60; }
+.pw-req--fail { color: var(--text-muted); }
+.pw-req--fail .pw-req-icon { color: var(--crimson); }
+
+.pw-confirm-error {
+  font-size: var(--fs-xs);
+  color: var(--crimson);
+  margin: 5px 0 0;
+  font-weight: 500;
+}
+
 /* ── Actions row ───────────────────────────────────────── */
 .cfg-actions {
   display: flex;

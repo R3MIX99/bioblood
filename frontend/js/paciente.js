@@ -7,11 +7,13 @@ const state = {
   patient:        null,
   studies:        [],
   loading:        true,
-  error:          null,   // mensaje de error global
+  error:          null,
   uploading:      false,
-  uploadProgress: 0,
+  uploadCurrent:  0,   // which file is being processed (1-based)
+  uploadTotal:    0,   // total files in the current batch
+  uploadProgress: 0,   // 0-100 for the current file's progress bar
   expandedId:     null,
-  pendingFile:    null,
+  pendingFiles:   [],  // [{ id: string, file: File }]
 };
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -70,13 +72,11 @@ async function fetchStudies(patientId) {
   } catch (_) { return []; }
 }
 
+// Uploads a single file. Returns { ok, study?, error? }.
 async function uploadStudy(file) {
-  state.uploading      = true;
   state.uploadProgress = 0;
-  state.pendingFile    = null;
   renderUploadSection();
 
-  // Barra de progreso animada (fetch no expone progreso real)
   const timer = setInterval(() => {
     if (state.uploadProgress < 85) {
       state.uploadProgress += Math.random() * 7;
@@ -89,11 +89,7 @@ async function uploadStudy(file) {
     const base64 = await fileToBase64(file);
     const res = await apiFetch("/studies", {
       method: "POST",
-      body: JSON.stringify({
-        patientId: state.patientId,
-        pdfBase64: base64,
-        filename:  file.name,
-      }),
+      body: JSON.stringify({ patientId: state.patientId, pdfBase64: base64, filename: file.name }),
     });
 
     clearInterval(timer);
@@ -101,25 +97,64 @@ async function uploadStudy(file) {
 
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      state.uploading = false;
-      renderUploadSection();
-      showToast(body.error || "Error al procesar el PDF.", "error");
-      return;
+      return { ok: false, error: body.error || "Error al procesar el PDF." };
     }
-
     const study = await res.json();
-    state.studies.unshift(study);
-    state.expandedId = study.id;
-    state.uploading  = false;
-    render();
-    showToast("Estudio analizado y guardado.", "success");
-
-  } catch (_) {
+    return { ok: true, study };
+  } catch {
     clearInterval(timer);
-    state.uploading      = false;
+    return { ok: false, error: "Error de red. Intenta de nuevo." };
+  }
+}
+
+// Processes all pending files sequentially.
+async function confirmUploadAll() {
+  if (state.pendingFiles.length === 0) return;
+
+  const batch           = [...state.pendingFiles];
+  state.pendingFiles    = [];
+  state.uploading       = true;
+  state.uploadTotal     = batch.length;
+  state.uploadCurrent   = 0;
+
+  const failed = [];
+  let anyAdded = false;
+
+  for (let i = 0; i < batch.length; i++) {
+    state.uploadCurrent  = i + 1;
     state.uploadProgress = 0;
     renderUploadSection();
-    showToast("Error de red. Intenta de nuevo.", "error");
+
+    const result = await uploadStudy(batch[i].file);
+    if (result.ok) {
+      state.studies.unshift(result.study);
+      anyAdded = true;
+    } else {
+      failed.push({ name: batch[i].file.name, error: result.error });
+    }
+  }
+
+  state.uploading     = false;
+  state.uploadTotal   = 0;
+  state.uploadCurrent = 0;
+
+  if (anyAdded) {
+    state.expandedId = state.studies[0]?.id ?? null;
+    _aiSummaryState.text           = null;
+    _aiSummaryState.error          = null;
+    _aiSummaryState.loading        = false;
+    _aiSummaryState.loadedForCount = null;
+  }
+
+  render();
+
+  if (failed.length === 0) {
+    const n = batch.length;
+    showToast(`${n} estudio${n !== 1 ? "s" : ""} analizado${n !== 1 ? "s" : ""} y guardado${n !== 1 ? "s" : ""}.`, "success");
+  } else if (anyAdded) {
+    showToast(`${batch.length - failed.length} subido${batch.length - failed.length !== 1 ? "s" : ""}. ${failed.length} fallido${failed.length !== 1 ? "s" : ""}: ${failed.map(f => f.name).join(", ")}`, "error");
+  } else {
+    showToast(`No se pudo procesar ningún archivo. ${failed[0]?.error ?? ""}`, "error");
   }
 }
 
@@ -161,7 +196,10 @@ function render() {
       <div id="patient-header" style="margin-bottom:var(--space-6)"></div>
 
       <!-- Subida de PDF -->
-      <div id="upload-section" style="margin-bottom:var(--space-8)"></div>
+      <div id="upload-section" style="margin-bottom:var(--space-6)"></div>
+
+      <!-- Resumen IA -->
+      <div id="ai-summary-section" style="margin-bottom:var(--space-8)"></div>
 
       <!-- Lista de estudios -->
       <div id="studies-section"></div>
@@ -180,6 +218,7 @@ function render() {
   } else {
     renderPatientHeader();
     renderUploadSection();
+    renderAiSummary();
     renderStudiesSection();
   }
   if (window.lucide) lucide.createIcons();
@@ -299,16 +338,17 @@ function renderUploadSection() {
   const el = document.getElementById("upload-section");
   if (!el || state.loading) return;
 
-  // Estado: subiendo con barra de progreso
+  // Estado: analizando archivos
   if (state.uploading) {
+    const label = state.uploadTotal > 1
+      ? `Analizando archivo ${state.uploadCurrent} de ${state.uploadTotal}...`
+      : "Analizando PDF con IA...";
     el.innerHTML = `
       <div class="card">
         <div style="display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-4)">
           <i data-lucide="loader-2" class="icon icon-md spin"
              style="color:var(--crimson)" aria-hidden="true"></i>
-          <span style="font-weight:600;font-size:var(--fs-body);color:var(--text)">
-            Analizando PDF con IA...
-          </span>
+          <span style="font-weight:600;font-size:var(--fs-body);color:var(--text)">${label}</span>
         </div>
         <div class="progress-bar-track" style="margin:0;width:100%">
           <div id="upload-bar-fill" class="progress-bar-fill"
@@ -323,35 +363,62 @@ function renderUploadSection() {
     return;
   }
 
-  // Estado: archivo seleccionado, pendiente de confirmar
-  if (state.pendingFile) {
-    const f      = state.pendingFile;
-    const sizeKb = Math.round(f.size / 1024);
-    el.innerHTML = `
-      <div class="card">
-        <div style="display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-5)">
-          <div style="width:44px;height:44px;border-radius:var(--radius-md);
+  // Estado: hay archivos en la cola
+  if (state.pendingFiles.length > 0) {
+    const fileRows = state.pendingFiles.map(({ id, file }) => {
+      const sizeKb = Math.round(file.size / 1024);
+      return `
+        <div style="display:flex;align-items:center;gap:var(--space-3);
+                    padding:var(--space-3) 0;border-bottom:1px solid var(--border)">
+          <div style="width:36px;height:36px;border-radius:var(--radius-md);
                       background:var(--crimson-50);display:flex;align-items:center;
                       justify-content:center;flex-shrink:0">
-            <i data-lucide="file-text" class="icon icon-lg"
+            <i data-lucide="file-text" class="icon icon-sm"
                style="color:var(--crimson)" aria-hidden="true"></i>
           </div>
           <div style="flex:1;min-width:0">
-            <p style="font-weight:600;font-size:var(--fs-body);color:var(--text);
-                      white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-              ${escHtml(f.name)}
+            <p style="font-weight:600;font-size:var(--fs-sm);color:var(--text);
+                      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:0">
+              ${escHtml(file.name)}
             </p>
-            <p style="font-size:var(--fs-xs);color:var(--text-light)">${sizeKb} KB</p>
+            <p style="font-size:var(--fs-xs);color:var(--text-light);margin:2px 0 0">
+              ${sizeKb} KB
+            </p>
           </div>
-          <button class="btn-icon" aria-label="Quitar archivo" onclick="clearPending()">
-            <i data-lucide="x" class="icon icon-md" aria-hidden="true"></i>
+          <button class="btn-icon" aria-label="Quitar archivo"
+                  onclick="removePendingFile('${id}')">
+            <i data-lucide="x" class="icon icon-sm" aria-hidden="true"></i>
           </button>
+        </div>`;
+    }).join("");
+
+    const n = state.pendingFiles.length;
+    el.innerHTML = `
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;
+                    margin-bottom:var(--space-4)">
+          <span style="font-weight:700;font-size:var(--fs-body);color:var(--text)">
+            ${n} archivo${n !== 1 ? "s" : ""} listo${n !== 1 ? "s" : ""} para analizar
+          </span>
+          <label style="display:inline-flex;align-items:center;gap:var(--space-2);
+                        font-size:var(--fs-sm);color:var(--crimson);font-weight:600;
+                        cursor:pointer">
+            <i data-lucide="plus" class="icon icon-sm" aria-hidden="true"></i>
+            Agregar más
+            <input type="file" accept=".pdf,application/pdf" multiple style="display:none"
+                   onchange="onFilesInput(this.files); this.value=''" />
+          </label>
         </div>
+
+        <div style="max-height:220px;overflow-y:auto;margin-bottom:var(--space-5)">
+          ${fileRows}
+        </div>
+
         <div style="display:flex;gap:var(--space-3)">
-          <button class="btn-ghost" onclick="clearPending()">Cancelar</button>
-          <button class="btn-primary" onclick="confirmUpload()">
+          <button class="btn-ghost" onclick="clearAllPending()">Cancelar</button>
+          <button class="btn-primary" onclick="confirmUploadAll()">
             <i data-lucide="sparkles" class="icon icon-md" aria-hidden="true"></i>
-            Analizar con IA
+            Analizar ${n > 1 ? n + " estudios" : "estudio"} con IA
           </button>
         </div>
       </div>`;
@@ -366,7 +433,7 @@ function renderUploadSection() {
       class="dropzone"
       role="button"
       tabindex="0"
-      aria-label="Subir PDF de estudio de laboratorio"
+      aria-label="Subir PDFs de estudios de laboratorio"
       onclick="document.getElementById('pdf-input').click()"
       ondragover="onDragOver(event)"
       ondragleave="onDragLeave()"
@@ -377,15 +444,163 @@ function renderUploadSection() {
         <i data-lucide="upload" class="icon"
            style="width:48px;height:48px;stroke-width:1.5" aria-hidden="true"></i>
       </div>
-      <p class="dropzone-title">Sube un estudio de laboratorio</p>
+      <p class="dropzone-title">Sube estudios de laboratorio</p>
       <p class="dropzone-sub">
-        Arrastra un PDF aqui o haz clic para seleccionar &mdash; max. 20 MB
+        Arrastra uno o varios PDFs aquí o haz clic para seleccionar &mdash; max. 20 MB por archivo
       </p>
     </div>
-    <input id="pdf-input" type="file" accept=".pdf,application/pdf"
-           style="display:none" onchange="onFileInput(this.files[0])" />`;
+    <input id="pdf-input" type="file" accept=".pdf,application/pdf" multiple
+           style="display:none" onchange="onFilesInput(this.files); this.value=''" />`;
 
   if (window.lucide) lucide.createIcons();
+}
+
+// ── Resumen IA ────────────────────────────────────────────────────────────────
+const _aiSummaryState = { text: null, loading: false, error: null, loadedForCount: null };
+
+function renderAiSummary() {
+  const el = document.getElementById("ai-summary-section");
+  if (!el || state.loading) return;
+
+  // Ocultar si no hay estudios
+  if (state.studies.length === 0) {
+    el.innerHTML = "";
+    return;
+  }
+
+  // Si ya tenemos el resumen cargado para el mismo número de estudios, solo renderizarlo
+  if (_aiSummaryState.text !== null && _aiSummaryState.loadedForCount === state.studies.length) {
+    el.innerHTML = buildAiSummaryHtml(_aiSummaryState.text);
+    if (window.lucide) lucide.createIcons();
+    return;
+  }
+
+  // Si hay error previo, mostrar con opción de reintentar
+  if (_aiSummaryState.error && _aiSummaryState.loadedForCount === state.studies.length) {
+    el.innerHTML = `
+      <div class="card" style="border-left:3px solid var(--yellow)">
+        <div style="display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-3)">
+          <i data-lucide="bot" class="icon icon-md" style="color:var(--text-muted)" aria-hidden="true"></i>
+          <span style="font-weight:700;font-size:var(--fs-body);color:var(--text)">Resumen IA</span>
+          <span style="font-size:var(--fs-xs);color:var(--text-muted);padding:2px 8px;
+                       background:var(--surface-2);border-radius:999px">Generado con IA</span>
+        </div>
+        <p style="font-size:var(--fs-sm);color:var(--text-muted);margin-bottom:var(--space-3)">
+          ${escHtml(_aiSummaryState.error)}
+        </p>
+        <button class="btn-ghost" onclick="refreshAiSummary()">
+          <i data-lucide="refresh-cw" class="icon icon-sm" aria-hidden="true"></i>
+          Reintentar
+        </button>
+      </div>`;
+    if (window.lucide) lucide.createIcons();
+    return;
+  }
+
+  // Estado de carga
+  el.innerHTML = `
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-3)">
+        <i data-lucide="loader-2" class="icon icon-md spin"
+           style="color:var(--crimson)" aria-hidden="true"></i>
+        <span style="font-weight:700;font-size:var(--fs-body);color:var(--text)">
+          Generando resumen de estudios...
+        </span>
+        <span style="font-size:var(--fs-xs);color:var(--text-muted);padding:2px 8px;
+                     background:var(--surface-2);border-radius:999px">Generado con IA</span>
+      </div>
+      <div class="skeleton skeleton-text" style="width:90%"></div>
+      <div class="skeleton skeleton-text" style="width:75%;margin-top:8px"></div>
+      <div class="skeleton skeleton-text" style="width:85%;margin-top:8px"></div>
+    </div>`;
+  if (window.lucide) lucide.createIcons();
+
+  // Cargar resumen si no está en progreso
+  if (!_aiSummaryState.loading) {
+    _aiSummaryState.loading = true;
+    _aiSummaryState.error   = null;
+    const countAtLoad = state.studies.length;
+
+    apiFetch("/studies/summary", {
+      method: "POST",
+      body:   JSON.stringify({ patientId: state.patientId }),
+    }).then(async res => {
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Error ${res.status}`);
+      }
+      return res.json();
+    }).then(data => {
+      _aiSummaryState.text            = data.summary;
+      _aiSummaryState.loadedForCount  = countAtLoad;
+      _aiSummaryState.loading         = false;
+      const el2 = document.getElementById("ai-summary-section");
+      if (el2) {
+        el2.innerHTML = buildAiSummaryHtml(data.summary);
+        if (window.lucide) lucide.createIcons();
+      }
+    }).catch(err => {
+      _aiSummaryState.error           = err.message || "No se pudo generar el resumen.";
+      _aiSummaryState.loadedForCount  = countAtLoad;
+      _aiSummaryState.loading         = false;
+      renderAiSummary();
+    });
+  }
+}
+
+function refreshAiSummary() {
+  _aiSummaryState.text    = null;
+  _aiSummaryState.error   = null;
+  _aiSummaryState.loading = false;
+  _aiSummaryState.loadedForCount = null;
+  renderAiSummary();
+}
+
+function buildAiSummaryHtml(text) {
+  const escaped = text
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  // Split into lines, render bullet lines as <li>, rest as plain text
+  const items = escaped.split("\n")
+    .map(line => line.trim())
+    .filter(Boolean)
+    .map(line => {
+      const isBullet = line.startsWith("•") || line.startsWith("-");
+      const content  = line.replace(/^[•\-]\s*/, "")
+        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+        .replace(/↑/g, '<span style="color:var(--red)">↑</span>')
+        .replace(/↓/g, '<span style="color:var(--amber)">↓</span>');
+      return isBullet
+        ? `<li style="margin-bottom:var(--space-2);line-height:1.55">${content}</li>`
+        : `<p style="margin:0 0 var(--space-2)">${content}</p>`;
+    });
+
+  const body = items.some(l => l.startsWith("<li"))
+    ? `<ul style="margin:0;padding-left:var(--space-5);list-style:disc">${items.join("")}</ul>`
+    : items.join("");
+
+  return `
+    <div class="card" style="border-left:3px solid var(--crimson)">
+      <div style="display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-4)">
+        <i data-lucide="bot" class="icon icon-md" style="color:var(--crimson)" aria-hidden="true"></i>
+        <span style="font-weight:700;font-size:var(--fs-body);color:var(--text)">Resumen de estudios</span>
+        <span style="font-size:var(--fs-xs);color:var(--crimson);padding:2px 8px;
+                     background:var(--crimson-50);border-radius:999px;font-weight:600">
+          ✦ Generado con IA
+        </span>
+        <button class="btn-icon" style="margin-left:auto" title="Actualizar resumen"
+                onclick="refreshAiSummary()">
+          <i data-lucide="refresh-cw" class="icon icon-sm" aria-hidden="true"></i>
+        </button>
+      </div>
+      <div style="font-size:var(--fs-sm);color:var(--text)">
+        ${body}
+      </div>
+      <p style="font-size:var(--fs-xs);color:var(--text-muted);margin-top:var(--space-4);
+                padding-top:var(--space-3);border-top:1px solid var(--border)">
+        Generado automáticamente a partir de los datos extraídos del estudio. No constituye consejo médico.
+      </p>
+    </div>`;
 }
 
 // ── Seccion de estudios ───────────────────────────────────────────────────────
@@ -406,7 +621,7 @@ function renderStudiesSection() {
 
   renderStudiesList();
   renderPivotTable(state.studies, "pivot-section");
-  renderGraficas(state.studies, "graficas-section");
+  renderGraficas(state.studies, "graficas-section", state.patient?.nombre || "");
 }
 
 function renderStudiesList() {
@@ -525,28 +740,43 @@ function confirmDeleteStudy(id) {
 }
 
 // ── Manejo de archivos ────────────────────────────────────────────────────────
-function onFileInput(file) {
-  if (!file) return;
-  if (file.type !== "application/pdf") {
-    showToast("Solo se aceptan archivos PDF.", "error");
-    return;
+
+function validateFile(file) {
+  if (file.type !== "application/pdf") return "Solo se aceptan archivos PDF.";
+  if (file.size > 20 * 1024 * 1024) return "El archivo supera el límite de 20 MB.";
+  return null;
+}
+
+function onFilesInput(fileList) {
+  if (!fileList || fileList.length === 0) return;
+
+  const existingNames = new Set(state.pendingFiles.map(p => p.file.name));
+  let rejected = 0;
+  let duplicates = 0;
+
+  for (const file of Array.from(fileList)) {
+    const err = validateFile(file);
+    if (err) { showToast(`${file.name}: ${err}`, "error"); rejected++; continue; }
+    if (existingNames.has(file.name)) { duplicates++; continue; }
+    state.pendingFiles.push({ id: crypto.randomUUID(), file });
+    existingNames.add(file.name);
   }
-  if (file.size > 20 * 1024 * 1024) {
-    showToast("El archivo supera el limite de 20 MB.", "error");
-    return;
+
+  if (duplicates > 0) {
+    showToast(`${duplicates} archivo${duplicates !== 1 ? "s" : ""} ya estaba${duplicates !== 1 ? "n" : ""} en la lista.`, "error");
   }
-  state.pendingFile = file;
+
   renderUploadSection();
 }
 
-function clearPending() {
-  state.pendingFile = null;
+function removePendingFile(id) {
+  state.pendingFiles = state.pendingFiles.filter(p => p.id !== id);
   renderUploadSection();
 }
 
-async function confirmUpload() {
-  if (!state.pendingFile) return;
-  await uploadStudy(state.pendingFile);
+function clearAllPending() {
+  state.pendingFiles = [];
+  renderUploadSection();
 }
 
 function onDragOver(e) {
@@ -559,8 +789,7 @@ function onDragLeave() {
 function onDrop(e) {
   e.preventDefault();
   document.getElementById("dz")?.classList.remove("drag-over");
-  const file = e.dataTransfer?.files?.[0];
-  if (file) onFileInput(file);
+  if (e.dataTransfer?.files?.length) onFilesInput(e.dataTransfer.files);
 }
 
 // ── Arranque ──────────────────────────────────────────────────────────────────

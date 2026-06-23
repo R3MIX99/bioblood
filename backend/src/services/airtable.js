@@ -432,16 +432,23 @@ async function uploadDoctorAvatar(doctorId, fileBuffer, mimeType, filename) {
 
   if (!fieldId) throw new Error("AIRTABLE_AVATAR_FIELD_ID no configurado en .env");
 
-  const form = new FormData();
-  form.append("file",     new Blob([fileBuffer], { type: mimeType }), filename);
-  form.append("filename", filename);
+  // uploadAttachment AGREGA al campo en vez de reemplazar — limpiamos el avatar
+  // anterior primero para que no se acumulen adjuntos viejos.
+  await base(DOCTORES).update([{ id: doctorId, fields: { avatar: [] } }]);
 
   const resp = await fetch(
     `https://content.airtable.com/v0/${baseId}/${doctorId}/${fieldId}/uploadAttachment`,
     {
       method:  "POST",
-      headers: { Authorization: `Bearer ${apiKey}` },
-      body:    form,
+      headers: {
+        Authorization:  `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        contentType: mimeType,
+        file:        fileBuffer.toString("base64"),
+        filename,
+      }),
     }
   );
 
@@ -450,8 +457,11 @@ async function uploadDoctorAvatar(doctorId, fileBuffer, mimeType, filename) {
     throw new Error(err.error?.message || `Error ${resp.status} al subir avatar`);
   }
 
-  const { attachment } = await resp.json();
-  return attachment?.url || null;
+  // La respuesta tiene forma { id, fields: { [fieldId]: [ {...attachment} ] } },
+  // no { attachment }.
+  const data        = await resp.json();
+  const attachments = data.fields?.[fieldId] || [];
+  return attachments[attachments.length - 1]?.url || null;
 }
 
 module.exports = {

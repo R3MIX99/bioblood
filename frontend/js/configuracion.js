@@ -98,25 +98,61 @@ function renderShell(me) {
           <div class="cfg-field-col">
             <div class="cfg-field">
               <label class="cfg-label" for="field-current-pw">Contraseña actual</label>
-              <input class="form-input" id="field-current-pw" type="password"
-                placeholder="••••••••" autocomplete="current-password" />
+              <div class="pw-input-wrap">
+                <input class="form-input" id="field-current-pw" type="password"
+                  placeholder="••••••••" autocomplete="current-password" />
+                <button type="button" class="pw-eye-btn" onclick="togglePwVisibility('field-current-pw', this)" aria-label="Mostrar contraseña" tabindex="-1">
+                  <i data-lucide="eye" style="width:18px;height:18px"></i>
+                </button>
+              </div>
             </div>
             <div class="cfg-field-row">
               <div class="cfg-field">
                 <label class="cfg-label" for="field-new-pw">Nueva contraseña</label>
-                <input class="form-input" id="field-new-pw" type="password"
-                  placeholder="Mínimo 6 caracteres" autocomplete="new-password" />
+                <div class="pw-input-wrap">
+                  <input class="form-input" id="field-new-pw" type="password"
+                    placeholder="Crea una contraseña segura" autocomplete="new-password"
+                    oninput="onCfgPasswordInput()" />
+                  <button type="button" class="pw-eye-btn" onclick="togglePwVisibility('field-new-pw', this)" aria-label="Mostrar contraseña" tabindex="-1">
+                    <i data-lucide="eye" style="width:18px;height:18px"></i>
+                  </button>
+                </div>
               </div>
               <div class="cfg-field">
                 <label class="cfg-label" for="field-confirm-pw">Confirmar contraseña</label>
-                <input class="form-input" id="field-confirm-pw" type="password"
-                  placeholder="Repite la nueva contraseña" autocomplete="new-password" />
+                <div class="pw-input-wrap">
+                  <input class="form-input" id="field-confirm-pw" type="password"
+                    placeholder="Repite la nueva contraseña" autocomplete="new-password"
+                    oninput="onCfgConfirmInput()" />
+                  <button type="button" class="pw-eye-btn" onclick="togglePwVisibility('field-confirm-pw', this)" aria-label="Mostrar contraseña" tabindex="-1">
+                    <i data-lucide="eye" style="width:18px;height:18px"></i>
+                  </button>
+                </div>
+                <p id="cfg-confirm-error" class="pw-confirm-error" style="display:none">Las contraseñas no coinciden</p>
               </div>
+            </div>
+
+            <div id="cfg-pw-requirements" class="pw-requirements">
+              <p class="pw-req-title">La contraseña debe tener:</p>
+              <ul class="pw-req-list">
+                <li class="pw-req" id="cfg-req-length">
+                  <span class="pw-req-icon">○</span> Mínimo 8 caracteres
+                </li>
+                <li class="pw-req" id="cfg-req-upper">
+                  <span class="pw-req-icon">○</span> Al menos una mayúscula
+                </li>
+                <li class="pw-req" id="cfg-req-lower">
+                  <span class="pw-req-icon">○</span> Al menos una minúscula
+                </li>
+                <li class="pw-req" id="cfg-req-number">
+                  <span class="pw-req-icon">○</span> Al menos un número
+                </li>
+              </ul>
             </div>
           </div>
 
           <div class="cfg-actions">
-            <button class="btn-primary" id="btn-save-password">Actualizar contraseña</button>
+            <button class="btn-primary" id="btn-save-password" disabled>Actualizar contraseña</button>
           </div>
 
         </div>
@@ -303,18 +339,74 @@ function attachProfileHandlers(me) {
 
 // ── Contraseña ────────────────────────────────────────────────────────────────
 
+function togglePwVisibility(fieldId, btn) {
+  const input = document.getElementById(fieldId);
+  if (!input) return;
+  const show = input.type === "password";
+  input.type = show ? "text" : "password";
+  btn.innerHTML = show
+    ? `<i data-lucide="eye-off" style="width:18px;height:18px"></i>`
+    : `<i data-lucide="eye" style="width:18px;height:18px"></i>`;
+  btn.setAttribute("aria-label", show ? "Ocultar contraseña" : "Mostrar contraseña");
+  if (window.lucide) lucide.createIcons();
+}
+
+const CFG_PW_RULES = {
+  "cfg-req-length": (v) => v.length >= 8,
+  "cfg-req-upper":  (v) => /[A-Z]/.test(v),
+  "cfg-req-lower":  (v) => /[a-z]/.test(v),
+  "cfg-req-number": (v) => /[0-9]/.test(v),
+};
+
+function checkCfgPasswordRules(value) {
+  let allOk = true;
+  for (const [id, test] of Object.entries(CFG_PW_RULES)) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    const ok = test(value);
+    if (!ok) allOk = false;
+    el.classList.toggle("pw-req--ok",   ok);
+    el.classList.toggle("pw-req--fail", !ok && value.length > 0);
+    el.querySelector(".pw-req-icon").textContent = ok ? "✓" : (value.length > 0 ? "✗" : "○");
+  }
+  return allOk;
+}
+
+function checkCfgConfirmMatch() {
+  const pw  = document.getElementById("field-new-pw")?.value ?? "";
+  const cpw = document.getElementById("field-confirm-pw")?.value ?? "";
+  const errEl = document.getElementById("cfg-confirm-error");
+  const match = pw === cpw;
+  if (errEl) errEl.style.display = (!match && cpw.length > 0) ? "block" : "none";
+  return match && cpw.length > 0;
+}
+
+function updateCfgSubmitState() {
+  const btn = document.getElementById("btn-save-password");
+  if (!btn) return;
+  const pw = document.getElementById("field-new-pw")?.value ?? "";
+  const rulesOk = checkCfgPasswordRules(pw);
+  const matchOk = checkCfgConfirmMatch();
+  btn.disabled = !(rulesOk && matchOk);
+}
+
+function onCfgPasswordInput() {
+  updateCfgSubmitState();
+}
+
+function onCfgConfirmInput() {
+  updateCfgSubmitState();
+}
+
 function attachPasswordHandlers() {
   document.getElementById("btn-save-password").addEventListener("click", async () => {
     const currentPassword = document.getElementById("field-current-pw").value;
     const newPassword     = document.getElementById("field-new-pw").value;
     const confirm         = document.getElementById("field-confirm-pw").value;
 
-    if (newPassword.length < 6) {
-      showToast("La contraseña debe tener al menos 6 caracteres", "error"); return;
-    }
-    if (newPassword !== confirm) {
-      showToast("Las contraseñas no coinciden", "error"); return;
-    }
+    const rulesOk = Object.values(CFG_PW_RULES).every((fn) => fn(newPassword));
+    const matchOk = checkCfgConfirmMatch();
+    if (!rulesOk || !matchOk) return;
 
     setLoading("btn-save-password", true);
     try {
@@ -328,11 +420,14 @@ function attachPasswordHandlers() {
       document.getElementById("field-current-pw").value = "";
       document.getElementById("field-new-pw").value     = "";
       document.getElementById("field-confirm-pw").value = "";
+      checkCfgPasswordRules("");
+      checkCfgConfirmMatch();
       showToast("Contraseña actualizada", "success");
     } catch (_) {
       showToast("Error al cambiar la contraseña", "error");
     } finally {
       setLoading("btn-save-password", false, "Actualizar contraseña");
+      updateCfgSubmitState();
     }
   });
 }
