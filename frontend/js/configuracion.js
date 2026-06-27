@@ -20,7 +20,6 @@ async function initConfig() {
   attachProfileHandlers(me);
   attachPasswordHandlers();
   attachSessionHandlers();
-  attachExportHandlers();
   attachDeleteHandlers();
 }
 
@@ -175,27 +174,6 @@ function renderShell(me) {
             <button class="btn-outline-danger" id="btn-revoke-sessions">
               <i data-lucide="log-out" class="icon icon-sm" aria-hidden="true"></i>
               Cerrar todas las sesiones
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- ── EXPORTAR ───────────────────────────────────── -->
-      <div class="cfg-card" style="animation-delay:180ms">
-        <div class="cfg-card-header">
-          <div class="cfg-card-title">
-            <i data-lucide="download" class="icon icon-md" aria-hidden="true"></i>
-            Exportar datos
-          </div>
-        </div>
-        <div class="cfg-card-body">
-          <p class="cfg-description">
-            Descarga un archivo ZIP con todos tus pacientes y estudios en formato JSON.
-          </p>
-          <div class="cfg-actions">
-            <button class="cfg-export-btn" id="btn-export">
-              <i data-lucide="download" class="icon icon-sm" aria-hidden="true"></i>
-              Descargar mis datos
             </button>
           </div>
         </div>
@@ -427,36 +405,6 @@ function attachSessionHandlers() {
   });
 }
 
-// ── Exportar ──────────────────────────────────────────────────────────────────
-
-function attachExportHandlers() {
-  document.getElementById("btn-export").addEventListener("click", async () => {
-    const btn = document.getElementById("btn-export");
-    btn.disabled    = true;
-    btn.textContent = "Generando…";
-
-    try {
-      const res = await apiFetch("/me/export");
-      if (!res.ok) { showToast("Error al exportar datos", "error"); return; }
-
-      const blob = await res.blob();
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement("a");
-      const date = new Date().toISOString().split("T")[0];
-      a.href     = url;
-      a.download = `bioblood-export-${date}.zip`;
-      a.click();
-      URL.revokeObjectURL(url);
-      showToast("Datos exportados correctamente", "success");
-    } catch (_) {
-      showToast("Error al exportar los datos", "error");
-    } finally {
-      btn.disabled    = false;
-      btn.innerHTML   = `<i data-lucide="download" class="icon icon-sm" aria-hidden="true"></i> Descargar mis datos`;
-      if (window.lucide) lucide.createIcons({ nodes: [btn] });
-    }
-  });
-}
 
 // ── Eliminar cuenta ───────────────────────────────────────────────────────────
 
