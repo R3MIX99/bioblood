@@ -1,5 +1,95 @@
 /* BioBlood — Renderizado de componentes de un estudio (Fase 5) */
 
+// ── Clasificación de estudios por categoría ────────────────────────────────────
+// Asigna un estudio a una categoría clínica en función de los componentes que contiene.
+// Cada panel tiene palabras clave; el estudio queda en la categoría con más coincidencias.
+
+const STUDY_PANELS = [
+  { name: "Biometría Hemática",      icon: "droplets",      color: "#C0392B",
+    keywords: ["hemoglobina","hematocrito","eritrocito","globulo rojo","leucocito","globulo blanco",
+               "plaqueta","trombocito","linfocito","neutrofilo","monocito","eosinofilo","basofilo",
+               "vcm","vgm","hcm","chcm","rdw","mpv","reticulocito","formula leucocitaria"] },
+  { name: "Química Sanguínea",       icon: "flask-conical", color: "#1A7A4A",
+    keywords: ["glucosa","urea","creatinina","acido urico","bun","nitrogeno ureico",
+               "albumina","proteina total","globulina","aclaramiento"] },
+  { name: "Perfil Lipídico",         icon: "activity",      color: "#8B5CF6",
+    keywords: ["colesterol","triglicerido","hdl","ldl","vldl","lipoproteina",
+               "colesterol no hdl","apolipoproteina","indice aterogenico"] },
+  { name: "Perfil Hepático",         icon: "zap",           color: "#D4870A",
+    keywords: ["tgo","tgp","ast","alt","bilirrubina","fosfatasa alcalina","ggt",
+               "transaminasa","dhl","ldh"] },
+  { name: "Perfil Tiroideo",         icon: "shield",        color: "#0891B2",
+    keywords: ["tsh","t3","t4","tiroxina","triyodotironina","tiroglobulina","tpo"] },
+  { name: "Electrolitos",            icon: "zap-off",       color: "#059669",
+    keywords: ["sodio","potasio","cloro","calcio","magnesio","fosforo","bicarbonato","electrolito"] },
+  { name: "Hemoglobina Glucosilada", icon: "percent",       color: "#DC2626",
+    keywords: ["hemoglobina glucosilada","hba1c","hb a1c","a1c","glucosilada","fructosamina"] },
+  { name: "Examen General de Orina", icon: "droplet",       color: "#0369A1",
+    keywords: ["orina","urina","densidad urinaria","ph orina","glucosa orina","proteina orina",
+               "sedimento","leucocitos orina","eritrocitos orina","nitritos","cetonas","urobilinogeno"] },
+];
+
+/**
+ * Clasifica un componente individual en su categoría clínica.
+ * Prioriza comp.category (asignado por la IA), con fallback a keyword matching.
+ */
+function classifyComponent(comp) {
+  // Usar la categoría asignada por la IA si es válida
+  if (comp.category) {
+    const valid = STUDY_PANELS.find(p => p.name === comp.category);
+    if (valid) return valid.name;
+  }
+
+  // Fallback: keyword matching sobre el nombre del componente
+  const norm = (comp.name || "").toLowerCase()
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9 ]/g, " ");
+
+  let bestPanel = null;
+  let bestScore = 0;
+  for (const panel of STUDY_PANELS) {
+    const score = panel.keywords.reduce((acc, kw) => acc + (norm.includes(kw) ? 1 : 0), 0);
+    if (score > bestScore) { bestScore = score; bestPanel = panel; }
+  }
+  return bestScore > 0 ? bestPanel.name : "Otros";
+}
+
+/**
+ * Construye un mapa de categorías a partir de un array de estudios.
+ * Agrupa a nivel de componente (un estudio puede aparecer en varias categorías).
+ * Retorna Map<categoryName, { studies: Study[], componentCount: number }>
+ */
+function buildCategoryMap(studies) {
+  const map = new Map(); // categoryName → { studyIds: Set, componentCount }
+
+  for (const study of studies) {
+    for (const comp of (study.components || [])) {
+      const cat = classifyComponent(comp);
+      if (!map.has(cat)) map.set(cat, { studyIds: new Set(), componentCount: 0 });
+      map.get(cat).studyIds.add(study.id);
+      map.get(cat).componentCount++;
+    }
+  }
+
+  // Convertir studyIds → studies array, preservando orden original
+  const result = new Map();
+  for (const [cat, { studyIds, componentCount }] of map) {
+    result.set(cat, {
+      studies: studies.filter(s => studyIds.has(s.id)),
+      componentCount,
+    });
+  }
+  return result;
+}
+
+/**
+ * Devuelve la metadata del panel para un nombre de categoría dado.
+ */
+function getPanelMeta(categoryName) {
+  return STUDY_PANELS.find(p => p.name === categoryName)
+    || { name: categoryName, icon: "folder", color: "#636B78" };
+}
+
 // Mapas de tinte y color por estado
 const TINT_MAP = {
   normal:      "card-tint card-tint-mint",
@@ -36,13 +126,71 @@ function renderComponentCards(study, container) {
     return;
   }
 
+  const rows = components.map(c => {
+    const status = (c.status || "nd").toLowerCase();
+    const ref    = buildRefText(c);
+
+    // Color de fondo por fila según estatus
+    const rowBg = status === "alto"   ? "background:rgba(192,57,43,0.04)"
+                : status === "bajo"   ? "background:rgba(212,135,10,0.04)"
+                : "";
+
+    // Color del valor
+    const valColor = VALUE_COLOR[status] || "var(--text)";
+
+    return `
+      <tr style="border-bottom:1px solid var(--border);${rowBg}">
+        <td style="padding:10px 16px;font-weight:600;font-size:var(--fs-sm);color:var(--text)">
+          ${escHtml(c.name)}
+        </td>
+        <td style="padding:10px 12px;text-align:right;font-family:var(--font-display);
+                   font-weight:700;font-size:15px;color:${valColor};white-space:nowrap">
+          ${c.value ?? "—"}
+        </td>
+        <td style="padding:10px 12px;font-size:var(--fs-xs);color:var(--text-muted);
+                   white-space:nowrap">
+          ${escHtml(c.unit || "—")}
+        </td>
+        <td style="padding:10px 12px;text-align:center">${getStatusBadge(status)}</td>
+        <td style="padding:10px 16px;text-align:right;font-size:var(--fs-xs);
+                   color:var(--text-muted);white-space:nowrap">
+          ${escHtml(ref)}
+        </td>
+      </tr>`;
+  }).join("");
+
   container.innerHTML = `
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:var(--space-3)">
-      ${components.map(componentCard).join("")}
+    <div style="background:var(--surface);border:1px solid var(--border);
+                border-radius:var(--radius-lg);overflow:hidden">
+      <table style="width:100%;border-collapse:collapse;font-family:var(--font-body)">
+        <thead>
+          <tr style="background:var(--surface-tint);border-bottom:1px solid var(--border)">
+            <th style="text-align:left;padding:10px 16px;font-size:var(--fs-xs);
+                       font-weight:700;color:var(--text-muted);text-transform:uppercase;
+                       letter-spacing:0.5px">Componente</th>
+            <th style="text-align:right;padding:10px 12px;font-size:var(--fs-xs);
+                       font-weight:700;color:var(--text-muted);text-transform:uppercase;
+                       letter-spacing:0.5px">Valor</th>
+            <th style="padding:10px 12px;font-size:var(--fs-xs);font-weight:700;
+                       color:var(--text-muted);text-transform:uppercase;
+                       letter-spacing:0.5px">Unidad</th>
+            <th style="text-align:center;padding:10px 12px;font-size:var(--fs-xs);
+                       font-weight:700;color:var(--text-muted);text-transform:uppercase;
+                       letter-spacing:0.5px">Resultado</th>
+            <th style="text-align:right;padding:10px 16px;font-size:var(--fs-xs);
+                       font-weight:700;color:var(--text-muted);text-transform:uppercase;
+                       letter-spacing:0.5px">Rango de referencia</th>
+          </tr>
+        </thead>
+        <tbody style="divide-y:var(--border)">
+          ${rows}
+        </tbody>
+      </table>
     </div>`;
 }
 
 function componentCard(c) {
+  // Mantenida por compatibilidad, ya no se usa directamente
   const status   = (c.status || "nd").toLowerCase();
   const tint     = TINT_MAP[status] || "";
   const valColor = VALUE_COLOR[status] || "var(--text)";
@@ -169,6 +317,8 @@ function renderPivotTable(studies, containerId) {
   }
 
   const { studies: sorted, rows } = buildPivotData(studies);
+  // Guardar para la descarga CSV
+  el._pivotData = { sorted, rows };
 
   // Fila 1 del thead: laboratorios (fondo crimson via CSS)
   const labHeaders = sorted.map(s =>
@@ -254,10 +404,19 @@ function renderPivotTable(studies, containerId) {
         </h2>
         <span class="badge-count">${sorted.length} estudios</span>
       </div>
-      <div style="display:flex;gap:var(--space-4);align-items:center">
+      <div style="display:flex;gap:var(--space-4);align-items:center;flex-wrap:wrap">
         ${dot("var(--red)",   "Alto")}
         ${dot("var(--amber)", "Bajo")}
         ${dot("var(--green)", "Normal")}
+        <button
+          class="btn-ghost"
+          style="display:inline-flex;align-items:center;gap:var(--space-2);font-size:var(--fs-sm)"
+          onclick="downloadPivotCSV('${containerId}')"
+          title="Descargar tabla como CSV"
+        >
+          <i data-lucide="download" class="icon icon-sm" aria-hidden="true"></i>
+          Descargar tabla
+        </button>
       </div>
     </div>
     <div style="background:var(--surface);border:1px solid var(--border);
@@ -268,18 +427,53 @@ function renderPivotTable(studies, containerId) {
             <tr>
               <th style="text-align:left">Componente</th>
               <th style="text-align:center">Unidad</th>
-              ${labHeaders}
-              <th style="text-align:center">Rango de referencia</th>
-            </tr>
-            <tr>
-              <th></th>
-              <th></th>
               ${dateHeaders}
-              <th></th>
+              <th style="text-align:center">Rango de referencia</th>
             </tr>
           </thead>
           <tbody>${bodyRows}</tbody>
         </table>
       </div>
     </div>`;
+}
+
+// ── Descarga CSV de la tabla pivote ──────────────────────────────────────────
+
+function downloadPivotCSV(containerId) {
+  const el   = document.getElementById(containerId);
+  const data = el?._pivotData;
+  if (!data) return;
+
+  const { sorted, rows } = data;
+
+  const csvCell = (v) => {
+    const s = String(v ?? "");
+    return s.includes(",") || s.includes('"') || s.includes("\n")
+      ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+
+  const labRow  = ["Componente", "Unidad", ...sorted.map(s => formatDate(s.fecha)), "Rango de referencia"];
+
+  const csvRows = [labRow];
+
+  for (const row of rows) {
+    const cells = row.cells.map(cell => cell ? String(cell.value ?? "—") : "NA");
+
+    let range = "";
+    if (row.lower != null && row.upper != null) range = `${row.lower} – ${row.upper} ${row.unit}`.trim();
+    else if (row.upper != null) range = `< ${row.upper} ${row.unit}`.trim();
+    else if (row.lower != null) range = `> ${row.lower} ${row.unit}`.trim();
+
+    csvRows.push([row.displayName, row.unit, ...cells, range]);
+  }
+
+  const csv  = csvRows.map(r => r.map(csvCell).join(",")).join("\r\n");
+  const bom  = "﻿"; // BOM para que Excel reconozca UTF-8
+  const blob = new Blob([bom + csv], { type: "text/csv;charset=utf-8;" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href     = url;
+  a.download = `tabla-comparativa-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }

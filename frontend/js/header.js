@@ -1,9 +1,8 @@
 /* BioBlood — Top navigation inyectable */
 
 const NAV_TABS = [
-  { label: "Dashboard",     href: "/dashboard",     page: "dashboard",  icon: "layout-dashboard" },
-  { label: "Pacientes",     href: "/pacientes",     page: "pacientes",  icon: "users" },
-  { label: "Configuración", href: "/configuracion",  page: "config",     icon: "settings" },
+  { label: "Dashboard", href: "/dashboard", page: "dashboard", icon: "layout-dashboard" },
+  { label: "Pacientes", href: "/pacientes", page: "pacientes", icon: "users" },
 ];
 
 async function initHeader() {

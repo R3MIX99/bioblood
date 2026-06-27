@@ -9,7 +9,6 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**
  * Intenta parsear JSON posiblemente truncado cerrando arrays/objetos abiertos.
- * Replica la lógica de reparación del bioblood.jsx original.
  */
 function parseJsonSafe(text) {
   const clean = text.replace(/```json|```/g, "").trim();
@@ -41,7 +40,7 @@ function parseJsonSafe(text) {
 // ── parseBloodStudy ────────────────────────────────────────────────────────
 
 /**
- * Analiza un PDF de estudio de sangre y extrae sus componentes.
+ * Analiza un PDF de estudio de sangre y extrae sus componentes con categoría clínica.
  * @param {string} base64Pdf - PDF codificado en base64
  * @param {string} filename  - nombre del archivo (para contexto)
  * @returns {object} { isBloodStudy, date, patientName, labName, components } | { isBloodStudy: false, reason }
@@ -70,7 +69,18 @@ Si NO es un estudio de sangre, responde ÚNICAMENTE con este JSON:
 
 Si SÍ es un estudio de sangre, extrae:
 1. La fecha del estudio (formato YYYY-MM-DD, si no hay fecha usa "${today}")
-2. Todos los componentes con valores numéricos, unidades y rangos de referencia
+2. Todos los componentes con valores numéricos, unidades, rangos de referencia y su categoría clínica
+
+Para el campo "category" de cada componente, usa EXACTAMENTE uno de estos valores:
+- "Biometría Hemática" — hemoglobina, hematocrito, eritrocitos, leucocitos, plaquetas, fórmula diferencial, etc.
+- "Química Sanguínea" — glucosa, urea, creatinina, ácido úrico, BUN, etc.
+- "Perfil Lipídico" — colesterol total, triglicéridos, HDL, LDL, VLDL, etc.
+- "Perfil Hepático" — TGO/AST, TGP/ALT, bilirrubinas, fosfatasa alcalina, GGT, etc.
+- "Perfil Tiroideo" — TSH, T3, T4, tiroxina, etc.
+- "Electrolitos" — sodio, potasio, cloro, calcio, magnesio, fósforo, etc.
+- "Hemoglobina Glucosilada" — HbA1c, hemoglobina glucosilada, fructosamina, etc.
+- "Examen General de Orina" — densidad urinaria, pH orina, glucosa en orina, proteínas en orina, sedimento, etc.
+- "Otros" — cualquier componente que no encaje en las categorías anteriores
 
 Responde ÚNICAMENTE con JSON válido, sin texto adicional:
 {
@@ -85,7 +95,8 @@ Responde ÚNICAMENTE con JSON válido, sin texto adicional:
       "unit": "unidad",
       "lowerLimit": número_o_null,
       "upperLimit": número_o_null,
-      "status": "normal|bajo|alto|desconocido"
+      "status": "normal|bajo|alto|desconocido",
+      "category": "una de las categorías listadas arriba"
     }
   ]
 }`,
@@ -175,7 +186,6 @@ async function summarizeStudies(studies) {
     const labLabel  = s.labName  ? ` (${s.labName})` : "";
     const header    = `Patient Study Results${dateLabel}${labLabel}`;
 
-    // Filter out components with null/undefined value, then format each line
     const lines = (s.components || [])
       .filter(c => c.value != null && c.name)
       .map(c => {

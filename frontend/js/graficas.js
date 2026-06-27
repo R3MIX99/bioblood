@@ -1,25 +1,22 @@
-/* BioBlood — Gráficas de tendencias con Chart.js (Fase 7) */
+/* BioBlood — Gráficas de tendencias con Chart.js */
 
 const _chartInstances = [];
 
 /**
  * Renderiza las gráficas de tendencia para un conjunto de estudios.
- * Solo muestra componentes presentes en 2+ estudios.
- * @param {Object[]} studies    - lista de estudios con .components[]
- * @param {string}   containerId - ID del elemento DOM donde renderizar
+ * Agrupación: nombre normalizado + unidad + lowerLimit + upperLimit.
+ * Componentes con la misma unidad y mismos límites → una sola gráfica.
+ * Cualquier diferencia en unidad o límites → gráfica separada.
+ * Solo muestra series con 2+ puntos (tendencia real).
  */
 function renderGraficas(studies, containerId, patientName) {
-  // Destruir instancias previas para evitar memory leaks
   _chartInstances.forEach(c => { try { c.destroy(); } catch (_) {} });
   _chartInstances.length = 0;
 
   const el = document.getElementById(containerId);
   if (!el) return;
 
-  if (!studies || studies.length < 2) {
-    el.innerHTML = "";
-    return;
-  }
+  if (!studies || studies.length < 2) { el.innerHTML = ""; return; }
 
   const sorted = [...studies].sort((a, b) => {
     if (!a.fecha && !b.fecha) return 0;
@@ -28,31 +25,48 @@ function renderGraficas(studies, containerId, patientName) {
     return a.fecha.localeCompare(b.fecha);
   });
 
-  // Agrupar datos por componente (nombre normalizado)
+  // ── Agrupación idéntica a la tabla pivote ──────────────────────────────────
+  // Clave: nombre_normalizado || unidad || lowerLimit || upperLimit
+  // Garantiza que solo se grafican juntos los puntos que comparten exactamente
+  // la misma unidad de medida y el mismo rango de referencia.
   const compMap = new Map();
+
   for (const study of sorted) {
     for (const comp of (study.components || [])) {
-      const norm = localNormalize(comp.name);
-      if (!compMap.has(norm)) {
-        compMap.set(norm, { displayName: comp.name, unit: comp.unit || "", points: [] });
+      const norm  = localNormalize(comp.name);
+      const unit  = comp.unit        ?? "";
+      const lower = comp.lowerLimit  ?? null;
+      const upper = comp.upperLimit  ?? null;
+      const key   = `${norm}||${unit}||${lower}||${upper}`;
+
+      if (!compMap.has(key)) {
+        compMap.set(key, {
+          norm,
+          displayName: comp.name,
+          unit,
+          lower,
+          upper,
+          points: [],
+        });
       }
-      compMap.get(norm).points.push({
-        date:       study.fecha,
-        value:      comp.value,
-        status:     comp.status || "nd",
-        lowerLimit: comp.lowerLimit ?? null,
-        upperLimit: comp.upperLimit ?? null,
+      compMap.get(key).points.push({
+        date:   study.fecha,
+        value:  Number(comp.value),   // asegurar numérico
+        status: (comp.status || "desconocido").toLowerCase(),
       });
     }
   }
 
-  // Solo los componentes con 2+ puntos tienen tendencia real
-  const components = [...compMap.values()].filter(c => c.points.length >= 2);
+  // Graficar todas las series con al menos 1 punto.
+  // Series con 1 punto muestran el valor puntual respecto a los límites de referencia,
+  // sin línea de tendencia (un solo punto no genera línea).
+  const components = [...compMap.values()].filter(c => c.points.length >= 1);
 
-  if (components.length === 0) {
-    el.innerHTML = "";
-    return;
-  }
+  if (components.length === 0) { el.innerHTML = ""; return; }
+
+  // Detectar nombres con múltiples variantes para mostrar sub-label en la tarjeta
+  const normCounts = new Map();
+  for (const c of components) normCounts.set(c.norm, (normCounts.get(c.norm) || 0) + 1);
 
   el.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;
@@ -61,25 +75,22 @@ function renderGraficas(studies, containerId, patientName) {
         <h2 style="font-family:var(--font-display);font-size:var(--fs-h2);color:var(--text)">
           Tendencias
         </h2>
-        <span class="badge-count">${components.length} componentes</span>
+        <span class="badge-count">${components.length} serie${components.length !== 1 ? "s" : ""}</span>
       </div>
       <div style="display:flex;gap:var(--space-4);align-items:center;flex-wrap:wrap">
         ${legendDot("#C0392B", "Alto")}
         ${legendDot("#D4870A", "Bajo")}
         ${legendDot("#1A7A4A", "Normal")}
-        <span style="font-size:var(--fs-xs);color:var(--text-light)">
-          — Límite referencia
-        </span>
+        <span style="font-size:var(--fs-xs);color:var(--text-light)">— Límite referencia</span>
       </div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));
                 gap:var(--space-5)">
-      ${components.map((comp, i) => chartCard(comp, i, patientName || "")).join("")}
+      ${components.map((comp, i) => chartCard(comp, i, patientName || "", normCounts.get(comp.norm) > 1)).join("")}
     </div>`;
 
   if (window.lucide) lucide.createIcons();
 
-  // Crear instancias de Chart.js después de que el DOM esté listo
   components.forEach((comp, i) => {
     const chart = createTrendChart(`grafica-${i}`, comp);
     if (chart) _chartInstances.push(chart);
@@ -96,18 +107,31 @@ function legendDot(color, label) {
   </span>`;
 }
 
-function chartCard(comp, i, patientName) {
+function chartCard(comp, i, patientName, hasVariants) {
+  // Rango de referencia legible
+  let refLabel = "";
+  if (comp.lower != null && comp.upper != null)
+    refLabel = `Ref: ${comp.lower} – ${comp.upper} ${comp.unit}`;
+  else if (comp.upper != null)
+    refLabel = `Ref: < ${comp.upper} ${comp.unit}`;
+  else if (comp.lower != null)
+    refLabel = `Ref: > ${comp.lower} ${comp.unit}`;
+
+  // Si hay variantes del mismo nombre, el sub-label ya incluye el rango;
+  // si no, mostrarlo igual para que el doctor vea el rango en la tarjeta.
+  const subLabel = refLabel || comp.unit;
+
   return `
     <div class="card" style="padding:20px;overflow:hidden">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;
                   gap:var(--space-2);margin-bottom:14px">
         <div style="min-width:0">
           <p style="font-weight:700;font-size:13px;color:var(--text);
-                    line-height:1.3;white-space:normal">
+                    line-height:1.3;white-space:normal;margin:0">
             ${escHtml(comp.displayName)}
           </p>
-          <p style="font-size:11px;color:var(--text-light);margin-top:2px">
-            ${escHtml(comp.unit)}
+          <p style="font-size:11px;color:var(--text-light);margin:3px 0 0;line-height:1.4">
+            ${escHtml(subLabel)}
           </p>
         </div>
         <button
@@ -116,8 +140,9 @@ function chartCard(comp, i, patientName) {
           aria-label="Descargar gráfica"
           data-chart="grafica-${i}"
           data-name="${escHtml(comp.displayName)}"
+          data-unit="${escHtml(comp.unit)}"
           data-patient="${escHtml(patientName)}"
-          onclick="downloadChart(this.dataset.chart, this.dataset.name, this.dataset.patient)"
+          onclick="downloadChart(this.dataset.chart, this.dataset.name, this.dataset.unit, this.dataset.patient)"
           style="flex-shrink:0"
         >
           <i data-lucide="download" class="icon icon-md" aria-hidden="true"></i>
@@ -138,47 +163,65 @@ function createTrendChart(canvasId, comp) {
   const labels = comp.points.map(p => formatDate(p.date));
   const values = comp.points.map(p => p.value);
 
-  const pointColors = comp.points.map(p => {
-    const s = (p.status || "nd").toLowerCase();
-    return s === "alto" ? "#C0392B" : s === "bajo" ? "#D4870A" : "#1A7A4A";
-  });
+  const STATUS_COLOR = {
+    alto:         "#C0392B",
+    bajo:         "#D4870A",
+    normal:       "#1A7A4A",
+    desconocido:  "#8891A0",
+    nd:           "#8891A0",
+  };
 
-  const upper = comp.points.find(p => p.upperLimit != null)?.upperLimit ?? null;
-  const lower = comp.points.find(p => p.lowerLimit != null)?.lowerLimit ?? null;
+  const pointColors = comp.points.map(p => STATUS_COLOR[p.status] || "#8891A0");
+
+  // ── Escala Y: incluir todos los valores Y las líneas de referencia ──────────
+  // Con un margen del 10 % para que nada quede cortado en el borde.
+  const allNumbers = [...values];
+  if (comp.lower != null) allNumbers.push(comp.lower);
+  if (comp.upper != null) allNumbers.push(comp.upper);
+  const dataMin = Math.min(...allNumbers);
+  const dataMax = Math.max(...allNumbers);
+  const padding = (dataMax - dataMin) * 0.15 || Math.abs(dataMax) * 0.15 || 1;
+  const yMin = Math.floor((dataMin - padding) * 100) / 100;
+  const yMax = Math.ceil( (dataMax + padding) * 100) / 100;
 
   const datasets = [
     {
+      label:                comp.displayName,
       data:                 values,
-      borderColor:          "#C0392B",
-      borderWidth:          2.5,
+      borderColor:          "#4A6FA5",
+      borderWidth:          2,
       pointBackgroundColor: pointColors,
       pointBorderColor:     "#fff",
       pointBorderWidth:     2,
       pointRadius:          5,
       pointHoverRadius:     7,
-      tension:              0.3,
+      // tension = 0: líneas rectas entre mediciones reales.
+      // Una curva suavizada implicaría valores intermedios que NO existen en el estudio.
+      tension:              0,
       fill:                 false,
       order:                1,
     },
   ];
 
-  // Líneas de referencia punteadas
-  if (upper != null) {
+  // Líneas de referencia: exactamente en los valores del estudio
+  if (comp.upper != null) {
     datasets.push({
-      data:        labels.map(() => upper),
-      borderColor: "rgba(192,57,43,0.40)",
-      borderDash:  [5, 4],
+      label:       `Límite sup. (${comp.upper} ${comp.unit})`,
+      data:        labels.map(() => comp.upper),
+      borderColor: "rgba(192,57,43,0.55)",
+      borderDash:  [6, 4],
       borderWidth: 1.5,
       pointRadius: 0,
       fill:        false,
       order:       2,
     });
   }
-  if (lower != null) {
+  if (comp.lower != null) {
     datasets.push({
-      data:        labels.map(() => lower),
-      borderColor: "rgba(212,135,10,0.45)",
-      borderDash:  [5, 4],
+      label:       `Límite inf. (${comp.lower} ${comp.unit})`,
+      data:        labels.map(() => comp.lower),
+      borderColor: "rgba(212,135,10,0.55)",
+      borderDash:  [6, 4],
       borderWidth: 1.5,
       pointRadius: 0,
       fill:        false,
@@ -195,19 +238,33 @@ function createTrendChart(canvasId, comp) {
       plugins: {
         legend: { display: false },
         tooltip: {
+          filter: item => item.datasetIndex === 0,
           callbacks: {
-            label: ctx => ctx.datasetIndex === 0
-              ? `${ctx.raw} ${comp.unit}`
-              : ctx.datasetIndex === 1 && upper != null
-                ? `Límite sup.: ${ctx.raw} ${comp.unit}`
-                : `Límite inf.: ${ctx.raw} ${comp.unit}`,
+            title: ctx => ctx[0]?.label ?? "",
+            label: ctx => {
+              const p      = comp.points[ctx.dataIndex];
+              const status = p?.status ?? "desconocido";
+              const statusLabel = status === "alto"    ? "↑ ALTO"
+                                : status === "bajo"    ? "↓ BAJO"
+                                : status === "normal"  ? "Normal"
+                                : "Sin clasificar";
+              const refStr = (comp.lower != null && comp.upper != null)
+                ? `  Ref: ${comp.lower} – ${comp.upper} ${comp.unit}`
+                : comp.upper != null ? `  Ref: < ${comp.upper} ${comp.unit}`
+                : comp.lower != null ? `  Ref: > ${comp.lower} ${comp.unit}`
+                : "";
+              return [
+                `  ${ctx.raw} ${comp.unit}  [${statusLabel}]`,
+                ...(refStr ? [refStr] : []),
+              ];
+            },
           },
           backgroundColor: "#111318",
-          titleFont:   { size: 11 },
-          bodyFont:    { size: 12, weight: "700" },
-          padding:     10,
+          titleFont:    { size: 11, weight: "600" },
+          bodyFont:     { size: 12 },
+          padding:      12,
           cornerRadius: 8,
-          filter: item => item.datasetIndex === 0, // solo tooltip del dato real
+          multiKeyBackground: "transparent",
         },
       },
       scales: {
@@ -216,11 +273,15 @@ function createTrendChart(canvasId, comp) {
           ticks: { font: { size: 10 }, color: "#8891A0", maxRotation: 35 },
         },
         y: {
+          min:   yMin,
+          max:   yMax,
           grid:  { color: "rgba(228,230,234,0.5)" },
           ticks: {
-            font:     { size: 10 },
-            color:    "#8891A0",
-            callback: v => `${v}`,
+            font:      { size: 10 },
+            color:     "#8891A0",
+            // Mostrar el número exacto sin redondeo artificial
+            callback:  v => Number.isInteger(v) ? v : +v.toFixed(3),
+            maxTicksLimit: 6,
           },
         },
       },
@@ -230,25 +291,23 @@ function createTrendChart(canvasId, comp) {
 
 // ── Descarga PNG ─────────────────────────────────────────────────────────────
 
-function downloadChart(canvasId, componentName, patientName) {
+function downloadChart(canvasId, componentName, unit, patientName) {
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
 
-  const HEADER_H  = 72;
-  const PAD       = 16;
-  const W         = canvas.width;
-  const H         = canvas.height;
+  const HEADER_H = 72;
+  const PAD      = 16;
+  const W        = canvas.width;
+  const H        = canvas.height;
 
-  const tmp     = document.createElement("canvas");
-  tmp.width     = W;
-  tmp.height    = H + HEADER_H;
-  const ctx     = tmp.getContext("2d");
+  const tmp   = document.createElement("canvas");
+  tmp.width   = W;
+  tmp.height  = H + HEADER_H;
+  const ctx   = tmp.getContext("2d");
 
-  // White background
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, tmp.width, tmp.height);
 
-  // Bottom border on header area
   ctx.strokeStyle = "#e8eaed";
   ctx.lineWidth   = 1;
   ctx.beginPath();
@@ -256,23 +315,20 @@ function downloadChart(canvasId, componentName, patientName) {
   ctx.lineTo(W, HEADER_H);
   ctx.stroke();
 
-  // BioBlood brand dot
   ctx.fillStyle = "#C0392B";
   ctx.beginPath();
   ctx.arc(PAD + 6, HEADER_H / 2, 6, 0, Math.PI * 2);
   ctx.fill();
 
-  // Component name (large, bold)
+  const nameWithUnit = unit ? `${componentName || "Gráfica"} (${unit})` : (componentName || "Gráfica");
   ctx.fillStyle = "#111318";
   ctx.font      = `700 15px Inter, -apple-system, sans-serif`;
-  ctx.fillText(componentName || "Gráfica", PAD + 20, HEADER_H / 2 - 7);
+  ctx.fillText(nameWithUnit, PAD + 20, HEADER_H / 2 - 7);
 
-  // Patient name
   ctx.fillStyle = "#636B78";
   ctx.font      = `500 11px Inter, -apple-system, sans-serif`;
   ctx.fillText(patientName ? `Paciente: ${patientName}` : "", PAD + 20, HEADER_H / 2 + 11);
 
-  // Download date (right-aligned)
   const dateStr = new Date().toLocaleDateString("es-MX", { year: "numeric", month: "long", day: "numeric" });
   ctx.fillStyle = "#9BA3AE";
   ctx.font      = `400 10px Inter, -apple-system, sans-serif`;
@@ -280,13 +336,11 @@ function downloadChart(canvasId, componentName, patientName) {
   ctx.fillText(dateStr, W - PAD, HEADER_H / 2 + 4);
   ctx.textAlign = "left";
 
-  // Chart (with white background)
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, HEADER_H, W, H);
   ctx.drawImage(canvas, 0, HEADER_H);
 
-  // Filename: NombrePaciente_NombreComponente_YYYY-MM-DD.png
-  const slug = (s) => (s || "").replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_\-]/g, "");
+  const slug     = s => (s || "").replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_-]/g, "");
   const dateSlug = new Date().toISOString().slice(0, 10);
   const filename = [slug(patientName), slug(componentName), dateSlug].filter(Boolean).join("_") + ".png";
 

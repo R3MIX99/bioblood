@@ -14,6 +14,8 @@ const state = {
   uploadProgress: 0,   // 0-100 for the current file's progress bar
   expandedId:     null,
   pendingFiles:   [],  // [{ id: string, file: File }]
+  activeCategory:    null, // null = show category picker; string = filter by category
+  recentCategories: new Set(), // categorías con datos nuevos tras el último upload
 };
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -139,7 +141,17 @@ async function confirmUploadAll() {
   state.uploadCurrent = 0;
 
   if (anyAdded) {
-    state.expandedId = state.studies[0]?.id ?? null;
+    state.expandedId       = null;
+    state.activeCategory   = null; // volver al picker para que el usuario vea las categorías nuevas
+    state.recentCategories = new Set();
+
+    // Registrar qué categorías tienen datos nuevos (nivel componente)
+    for (const study of state.studies.slice(0, batch.length)) {
+      for (const comp of (study.components || [])) {
+        state.recentCategories.add(classifyComponent(comp));
+      }
+    }
+
     _aiSummaryState.text           = null;
     _aiSummaryState.error          = null;
     _aiSummaryState.loading        = false;
@@ -198,10 +210,13 @@ function render() {
       <!-- Subida de PDF -->
       <div id="upload-section" style="margin-bottom:var(--space-6)"></div>
 
-      <!-- Resumen IA -->
+      <!-- Resumen IA (solo visible cuando hay categoría activa o no hay estudios) -->
       <div id="ai-summary-section" style="margin-bottom:var(--space-8)"></div>
 
-      <!-- Lista de estudios -->
+      <!-- Selector de categorías o contenido filtrado por categoría -->
+      <div id="category-section"></div>
+
+      <!-- Lista de estudios (solo cuando hay categoría activa) -->
       <div id="studies-section"></div>
 
       <!-- Tabla pivote comparativa (visible con ≥2 estudios) -->
@@ -219,7 +234,7 @@ function render() {
     renderPatientHeader();
     renderUploadSection();
     renderAiSummary();
-    renderStudiesSection();
+    renderCategorySection();
   }
   if (window.lucide) lucide.createIcons();
 }
@@ -462,8 +477,8 @@ function renderAiSummary() {
   const el = document.getElementById("ai-summary-section");
   if (!el || state.loading) return;
 
-  // Ocultar si no hay estudios
-  if (state.studies.length === 0) {
+  // Ocultar si no hay estudios o si estamos en el picker (sin categoría activa)
+  if (state.studies.length === 0 || state.activeCategory === null) {
     el.innerHTML = "";
     return;
   }
@@ -603,12 +618,144 @@ function buildAiSummaryHtml(text) {
     </div>`;
 }
 
+// ── Selector de categorías ────────────────────────────────────────────────────
+function renderCategorySection() {
+  const el = document.getElementById("category-section");
+  if (!el) return;
+
+  if (state.loading) { el.innerHTML = ""; return; }
+
+  if (state.studies.length === 0) { el.innerHTML = ""; return; }
+
+  if (state.activeCategory === null) {
+    // Mostrar el picker de categorías
+    renderCategoryPicker(el);
+  } else {
+    // Mostrar contenido filtrado + botón de volver
+    renderCategoryContent(el);
+  }
+}
+
+function renderCategoryPicker(el) {
+  // Agrupar a nivel de componente (un estudio puede aparecer en varias categorías)
+  const categoryMap = buildCategoryMap(state.studies);
+
+  const cards = [...categoryMap.entries()].map(([catName, { studies: catStudies, componentCount }]) => {
+    const meta    = getPanelMeta(catName);
+    const isNew   = state.recentCategories.has(catName);
+    const count   = catStudies.length;
+    return `
+      <button
+        class="card"
+        data-category="${escHtml(catName)}"
+        onclick="selectCategory(this.dataset.category)"
+        style="
+          text-align:left;border:none;cursor:pointer;
+          padding:var(--space-5);
+          display:flex;flex-direction:column;gap:var(--space-3);
+          transition:box-shadow .15s,transform .15s;
+          border-left:4px solid ${meta.color};
+          ${isNew ? `outline:2px solid ${meta.color};outline-offset:2px;` : ""}
+        "
+        onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='var(--shadow-md)'"
+        onmouseleave="this.style.transform='';this.style.boxShadow=''"
+      >
+        <div style="display:flex;align-items:center;gap:var(--space-3)">
+          <span style="
+            width:40px;height:40px;border-radius:10px;flex-shrink:0;
+            background:${meta.color}18;display:flex;align-items:center;justify-content:center;
+          ">
+            <i data-lucide="${meta.icon}" style="width:20px;height:20px;stroke-width:1.75;color:${meta.color}" aria-hidden="true"></i>
+          </span>
+          <div style="min-width:0;flex:1">
+            <div style="display:flex;align-items:center;gap:var(--space-2)">
+              <p style="font-weight:700;font-size:var(--fs-body);color:var(--text);margin:0;line-height:1.3">
+                ${escHtml(catName)}
+              </p>
+              ${isNew ? `<span style="font-size:10px;font-weight:700;color:#fff;
+                background:${meta.color};border-radius:999px;padding:1px 7px;letter-spacing:.3px">
+                NUEVO
+              </span>` : ""}
+            </div>
+            <p style="font-size:var(--fs-xs);color:var(--text-muted);margin:3px 0 0">
+              ${count} estudio${count !== 1 ? "s" : ""} · ${componentCount} componente${componentCount !== 1 ? "s" : ""}
+            </p>
+          </div>
+          <i data-lucide="chevron-right" style="width:18px;height:18px;color:var(--text-light);flex-shrink:0" aria-hidden="true"></i>
+        </div>
+      </button>`;
+  }).join("");
+
+  el.innerHTML = `
+    <div style="margin-bottom:var(--space-4)">
+      <h2 style="font-family:var(--font-display);font-size:var(--fs-h2);color:var(--text);margin-bottom:var(--space-2)">
+        Tipos de estudio
+      </h2>
+      <p style="font-size:var(--fs-sm);color:var(--text-muted)">
+        Selecciona una categoría para ver los estudios, tabla comparativa y gráficas de tendencia.
+      </p>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:var(--space-4)">
+      ${cards}
+    </div>`;
+
+  if (window.lucide) lucide.createIcons();
+}
+
+function renderCategoryContent(el) {
+  const meta = getPanelMeta(state.activeCategory);
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-6)">
+      <button
+        class="btn-icon"
+        onclick="selectCategory(null)"
+        title="Volver a categorías"
+        aria-label="Volver a categorías"
+        style="border:1px solid var(--border)"
+      >
+        <i data-lucide="arrow-left" class="icon icon-md" aria-hidden="true"></i>
+      </button>
+      <span style="
+        width:36px;height:36px;border-radius:9px;flex-shrink:0;
+        background:${meta.color}18;display:flex;align-items:center;justify-content:center;
+      ">
+        <i data-lucide="${meta.icon}" style="width:18px;height:18px;stroke-width:1.75;color:${meta.color}" aria-hidden="true"></i>
+      </span>
+      <h2 style="font-family:var(--font-display);font-size:var(--fs-h2);color:var(--text);margin:0">
+        ${escHtml(state.activeCategory)}
+      </h2>
+    </div>`;
+
+  if (window.lucide) lucide.createIcons();
+  renderStudiesSection();
+}
+
+function selectCategory(categoryName) {
+  state.activeCategory = categoryName;
+  state.expandedId     = null;
+  // Al volver al picker manualmente (sin upload), limpiar badges "NUEVO"
+  if (categoryName === null) state.recentCategories = new Set();
+  render();
+}
+
 // ── Seccion de estudios ───────────────────────────────────────────────────────
 function renderStudiesSection() {
   const el = document.getElementById("studies-section");
-  if (!el || state.loading) return;
+  if (!el || state.loading || state.activeCategory === null) {
+    if (el) el.innerHTML = "";
+    return;
+  }
 
-  const count = state.studies.length;
+  // Filtrar estudios por categoría activa a nivel de componente
+  const cat = state.activeCategory;
+  const filtered = state.studies
+    .map(s => ({
+      ...s,
+      components: (s.components || []).filter(c => classifyComponent(c) === cat),
+    }))
+    .filter(s => s.components.length > 0);
+
+  const count = filtered.length;
 
   el.innerHTML = `
     <div style="display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-4)">
@@ -619,16 +766,18 @@ function renderStudiesSection() {
     </div>
     <div id="studies-list"></div>`;
 
-  renderStudiesList();
-  renderPivotTable(state.studies, "pivot-section");
-  renderGraficas(state.studies, "graficas-section", state.patient?.nombre || "");
+  renderStudiesList(filtered);
+  renderPivotTable(filtered, "pivot-section");
+  renderGraficas(filtered, "graficas-section", state.patient?.nombre || "");
 }
 
-function renderStudiesList() {
+function renderStudiesList(studies) {
   const el = document.getElementById("studies-list");
   if (!el) return;
 
-  if (state.studies.length === 0) {
+  const list = studies ?? state.studies;
+
+  if (list.length === 0) {
     el.innerHTML = `
       <div class="empty-state" style="padding:60px var(--space-8)">
         <div class="empty-state-icon">
@@ -645,11 +794,11 @@ function renderStudiesList() {
     return;
   }
 
-  el.innerHTML = state.studies.map(studyRow).join("");
+  el.innerHTML = list.map(studyRow).join("");
 
   // Inyectar componentes del estudio expandido
   if (state.expandedId) {
-    const study     = state.studies.find(s => s.id === state.expandedId);
+    const study     = list.find(s => s.id === state.expandedId);
     const container = document.getElementById(`comp-${state.expandedId}`);
     if (study && container) renderComponentCards(study, container);
   }

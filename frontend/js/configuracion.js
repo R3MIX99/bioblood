@@ -20,7 +20,6 @@ async function initConfig() {
   attachProfileHandlers(me);
   attachPasswordHandlers();
   attachSessionHandlers();
-  attachExportHandlers();
   attachDeleteHandlers();
 }
 
@@ -175,27 +174,6 @@ function renderShell(me) {
             <button class="btn-outline-danger" id="btn-revoke-sessions">
               <i data-lucide="log-out" class="icon icon-sm" aria-hidden="true"></i>
               Cerrar todas las sesiones
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- ── EXPORTAR ───────────────────────────────────── -->
-      <div class="cfg-card" style="animation-delay:180ms">
-        <div class="cfg-card-header">
-          <div class="cfg-card-title">
-            <i data-lucide="download" class="icon icon-md" aria-hidden="true"></i>
-            Exportar datos
-          </div>
-        </div>
-        <div class="cfg-card-body">
-          <p class="cfg-description">
-            Descarga un archivo ZIP con todos tus pacientes y estudios en formato JSON.
-          </p>
-          <div class="cfg-actions">
-            <button class="cfg-export-btn" id="btn-export">
-              <i data-lucide="download" class="icon icon-sm" aria-hidden="true"></i>
-              Descargar mis datos
             </button>
           </div>
         </div>
@@ -449,6 +427,7 @@ function attachSessionHandlers() {
   });
 }
 
+<<<<<<< HEAD
 // ── Exportar ──────────────────────────────────────────────────────────────────
 
 function attachExportHandlers() {
@@ -486,6 +465,8 @@ function attachExportHandlers() {
     }
   });
 }
+=======
+>>>>>>> 00c9136e760f0c887cc734f21caece3542834310
 
 // ── Eliminar cuenta ───────────────────────────────────────────────────────────
 
