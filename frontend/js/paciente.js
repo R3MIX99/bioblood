@@ -1,4 +1,4 @@
-/* BioBlood — Detalle de paciente (Fase 5) */
+/* BioBlood — Detalle de paciente (Fase 5 · rediseño layout) */
 // Depende de: api.js, utils.js, estudios.js, graficas.js, header.js
 
 // ── Estado ────────────────────────────────────────────────────────────────────
@@ -9,29 +9,26 @@ const state = {
   loading:        true,
   error:          null,
   uploading:      false,
-  uploadCurrent:  0,   // which file is being processed (1-based)
-  uploadTotal:    0,   // total files in the current batch
-  uploadProgress: 0,   // 0-100 for the current file's progress bar
+  uploadCurrent:  0,
+  uploadTotal:    0,
+  uploadProgress: 0,
   expandedId:     null,
-  pendingFiles:   [],  // [{ id: string, file: File }]
-  activeCategory:    null, // null = show category picker; string = filter by category
-  recentCategories: new Set(), // categorías con datos nuevos tras el último upload
+  pendingFiles:   [],
+  activeCategory:    null,
+  recentCategories:  new Set(),
+  activeTab:         "tipos",    // "tipos" | "archivos"
+  openCharts:        new Set(),  // set de component keys con gráfica abierta
 };
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
   const params = new URLSearchParams(window.location.search);
   state.patientId = params.get("id");
-
-  if (!state.patientId) {
-    window.location.replace("/pacientes.html");
-    return;
-  }
+  if (!state.patientId) { window.location.replace("/pacientes.html"); return; }
 
   await requireSession();
   render();
 
-  // Carga en paralelo
   const [patient, studies] = await Promise.all([
     fetchPatient(state.patientId),
     fetchStudies(state.patientId),
@@ -48,20 +45,17 @@ async function fetchPatient(id) {
   try {
     const res = await apiFetch(`/patients/${id}`);
     if (res.status === 401) {
-      const returnTo = encodeURIComponent(window.location.href);
-      window.location.replace(`/login.html?returnTo=${returnTo}`);
+      window.location.replace(`/login.html?returnTo=${encodeURIComponent(window.location.href)}`);
       return null;
     }
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       state.error = body.error || `Error ${res.status} al cargar el paciente.`;
-      console.error("fetchPatient:", res.status, state.error);
       return null;
     }
     return res.json();
   } catch (err) {
     state.error = "Error de red. Verifica que el servidor esté corriendo.";
-    console.error("fetchPatient:", err);
     return null;
   }
 }
@@ -74,10 +68,9 @@ async function fetchStudies(patientId) {
   } catch (_) { return []; }
 }
 
-// Uploads a single file. Returns { ok, study?, error? }.
 async function uploadStudy(file) {
   state.uploadProgress = 0;
-  renderUploadSection();
+  renderUploadBar();
 
   const timer = setInterval(() => {
     if (state.uploadProgress < 85) {
@@ -93,31 +86,27 @@ async function uploadStudy(file) {
       method: "POST",
       body: JSON.stringify({ patientId: state.patientId, pdfBase64: base64, filename: file.name }),
     });
-
     clearInterval(timer);
     state.uploadProgress = 100;
-
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       return { ok: false, error: body.error || "Error al procesar el PDF." };
     }
-    const study = await res.json();
-    return { ok: true, study };
+    return { ok: true, study: await res.json() };
   } catch {
     clearInterval(timer);
     return { ok: false, error: "Error de red. Intenta de nuevo." };
   }
 }
 
-// Processes all pending files sequentially.
 async function confirmUploadAll() {
   if (state.pendingFiles.length === 0) return;
 
-  const batch           = [...state.pendingFiles];
-  state.pendingFiles    = [];
-  state.uploading       = true;
-  state.uploadTotal     = batch.length;
-  state.uploadCurrent   = 0;
+  const batch = [...state.pendingFiles];
+  state.pendingFiles  = [];
+  state.uploading     = true;
+  state.uploadTotal   = batch.length;
+  state.uploadCurrent = 0;
 
   const failed = [];
   let anyAdded = false;
@@ -125,7 +114,7 @@ async function confirmUploadAll() {
   for (let i = 0; i < batch.length; i++) {
     state.uploadCurrent  = i + 1;
     state.uploadProgress = 0;
-    renderUploadSection();
+    renderUploadBar();
 
     const result = await uploadStudy(batch[i].file);
     if (result.ok) {
@@ -141,16 +130,12 @@ async function confirmUploadAll() {
   state.uploadCurrent = 0;
 
   if (anyAdded) {
-    state.expandedId       = null;
-    state.activeCategory   = null; // volver al picker para que el usuario vea las categorías nuevas
+    state.expandedId      = null;
+    state.activeCategory  = null;
     state.recentCategories = new Set();
-
-    // Registrar qué categorías tienen datos nuevos (nivel componente)
-    for (const study of state.studies.slice(0, batch.length)) {
-      for (const comp of (study.components || [])) {
+    for (const study of state.studies.slice(0, batch.length))
+      for (const comp of (study.components || []))
         state.recentCategories.add(classifyComponent(comp));
-      }
-    }
 
     _aiSummaryState.text           = null;
     _aiSummaryState.error          = null;
@@ -176,7 +161,7 @@ async function apiDeleteStudy(id) {
     if (res.ok) {
       state.studies    = state.studies.filter(s => s.id !== id);
       state.expandedId = null;
-      renderStudiesSection();
+      renderFilesTab();
       showToast("Estudio eliminado.", "success");
     } else {
       showToast("No se pudo eliminar.", "error");
@@ -191,6 +176,8 @@ function render() {
   const root = document.getElementById("paciente-root");
   if (!root) return;
 
+  if (state.error) { renderErrorState(root); return; }
+
   root.innerHTML = `
     <div class="page-body">
 
@@ -204,45 +191,44 @@ function render() {
         </a>
       </div>
 
-      <!-- Header del paciente -->
-      <div id="patient-header" style="margin-bottom:var(--space-6)"></div>
+      <!-- Layout dos columnas -->
+      <div class="pac-detail-layout">
 
-      <!-- Subida de PDF -->
-      <div id="upload-section" style="margin-bottom:var(--space-6)"></div>
+        <!-- ── Sidebar ─────────────────────────────── -->
+        <aside class="pac-detail-sidebar">
+          <div id="pac-sidebar-card"></div>
+          <div id="pac-antecedentes-card" style="margin-top:var(--space-4)"></div>
+        </aside>
 
-      <!-- Resumen IA (solo visible cuando hay categoría activa o no hay estudios) -->
-      <div id="ai-summary-section" style="margin-bottom:var(--space-8)"></div>
+        <!-- ── Main ───────────────────────────────── -->
+        <div class="pac-detail-main">
+          <!-- Gráfica salud general -->
+          <div id="pac-health-chart" style="margin-bottom:var(--space-4)"></div>
 
-      <!-- Selector de categorías o contenido filtrado por categoría -->
-      <div id="category-section"></div>
+          <!-- Upload bar -->
+          <div id="pac-upload-bar" style="margin-bottom:var(--space-4)"></div>
 
-      <!-- Lista de estudios (solo cuando hay categoría activa) -->
-      <div id="studies-section"></div>
+          <!-- Pestañas + contenido -->
+          <div id="pac-tabs-section"></div>
 
-      <!-- Tabla pivote comparativa (visible con ≥2 estudios) -->
-      <div id="pivot-section" style="margin-top:var(--space-8)"></div>
+          <!-- Panel inline de categoría activa -->
+          <div id="pac-category-panel" style="margin-top:var(--space-1)"></div>
+        </div>
 
-      <!-- Gráficas de tendencia (visible con ≥2 estudios) -->
-      <div id="graficas-section" style="margin-top:var(--space-8)"></div>
+      </div>
 
-    </div>
-    <div id="toast-container"></div>`;
+    </div>`;
 
-  if (state.error) {
-    renderErrorState();
-  } else {
-    renderPatientHeader();
-    renderUploadSection();
-    renderAiSummary();
-    renderCategorySection();
-  }
   if (window.lucide) lucide.createIcons();
+
+  renderSidebar();
+  renderHealthChart();
+  renderUploadBar();
+  renderTabsSection();
 }
 
-// ── Estado de error ───────────────────────────────────────────────────────────
-function renderErrorState() {
-  const root = document.getElementById("paciente-root");
-  if (!root) return;
+// ── Error state ───────────────────────────────────────────────────────────────
+function renderErrorState(root) {
   root.innerHTML = `
     <div class="page-body">
       <div style="margin-bottom:var(--space-5)">
@@ -268,167 +254,340 @@ function renderErrorState() {
           Ir a directorio de pacientes
         </a>
       </div>
-    </div>
-    <div id="toast-container"></div>`;
+    </div>`;
   if (window.lucide) lucide.createIcons();
 }
 
-// ── Header del paciente ───────────────────────────────────────────────────────
-function renderPatientHeader() {
-  const el = document.getElementById("patient-header");
+// ── Sidebar ───────────────────────────────────────────────────────────────────
+function renderSidebar() {
+  renderSidebarCard();
+  renderAntecedentes();
+}
+
+function renderSidebarCard() {
+  const el = document.getElementById("pac-sidebar-card");
   if (!el) return;
 
   if (state.loading) {
     el.innerHTML = `
       <div class="card" style="display:flex;flex-direction:column;gap:var(--space-3)">
-        <div class="skeleton skeleton-title" style="width:45%"></div>
-        <div class="skeleton skeleton-text"  style="width:65%"></div>
+        <div style="display:flex;justify-content:center">
+          <div class="skeleton" style="width:60px;height:60px;border-radius:50%"></div>
+        </div>
+        <div class="skeleton skeleton-title" style="width:70%;margin:0 auto"></div>
+        <div class="skeleton skeleton-text"  style="width:50%;margin:0 auto"></div>
       </div>`;
     return;
   }
 
-  if (!state.patient) return;
-  const p       = state.patient;
+  const p = state.patient;
+  if (!p) return;
+
   const initial = (p.nombre || "?")[0].toUpperCase();
-
-  const metaParts = [
-    p.edad     ? `${p.edad} años`  : null,
-    p.sexo     || null,
-    p.telefono || null,
-    p.email    || null,
-  ].filter(Boolean);
-
-  const clinicalChips = [
-    p.alergias      ? { label: "Alergias",      icon: "alert-triangle", val: p.alergias }      : null,
-    p.padecimientos ? { label: "Padecimientos", icon: "heart-pulse",    val: p.padecimientos } : null,
-    p.medicamentos  ? { label: "Medicamentos",  icon: "pill",           val: p.medicamentos }  : null,
-  ].filter(Boolean);
+  const meta = [p.edad ? `${p.edad} años` : null, p.sexo || null].filter(Boolean);
+  const totalStudies = state.studies.length;
 
   el.innerHTML = `
-    <div class="card" style="display:flex;align-items:flex-start;gap:var(--space-5)">
-
-      <!-- Avatar -->
-      <div style="width:64px;height:64px;border-radius:50%;background:var(--crimson-100);
+    <div class="card" style="text-align:center;padding:var(--space-6) var(--space-5)">
+      <div style="width:60px;height:60px;border-radius:50%;background:var(--crimson-100);
                   display:flex;align-items:center;justify-content:center;
-                  color:var(--crimson);font-weight:800;font-size:26px;
-                  font-family:var(--font-display);flex-shrink:0">
+                  color:var(--crimson);font-weight:800;font-size:22px;
+                  font-family:var(--font-display);margin:0 auto var(--space-3)">
         ${initial}
       </div>
-
-      <!-- Info -->
-      <div style="flex:1;min-width:0">
-        <h1 style="font-family:var(--font-display);font-size:var(--fs-h1);
-                   color:var(--text);margin-bottom:var(--space-1)">
-          ${escHtml(p.nombre)}
-        </h1>
-
-        ${metaParts.length ? `
-          <p style="font-size:var(--fs-sm);color:var(--text-light);margin-bottom:var(--space-3)">
-            ${metaParts.map(escHtml).join("&ensp;&middot;&ensp;")}
-          </p>` : ""}
-
-        ${clinicalChips.length ? `
-          <div style="display:flex;flex-wrap:wrap;gap:var(--space-2)">
-            ${clinicalChips.map(ch => `
-              <span class="chip" title="${escHtml(ch.val)}" style="cursor:default">
-                <i data-lucide="${ch.icon}" class="icon icon-sm" aria-hidden="true"></i>
-                ${ch.label}
-              </span>`).join("")}
-          </div>` : ""}
-
-        ${p.notas ? `
-          <p style="font-size:var(--fs-sm);color:var(--text-muted);
-                    margin-top:var(--space-3);font-style:italic">
-            ${escHtml(p.notas)}
-          </p>` : ""}
+      <h1 style="font-family:var(--font-display);font-size:var(--fs-h2);color:var(--text);
+                 margin-bottom:var(--space-1);line-height:1.2">${escHtml(p.nombre)}</h1>
+      ${p.email ? `<p style="font-size:var(--fs-xs);color:var(--text-light);
+                              margin-bottom:var(--space-3)">${escHtml(p.email)}</p>` : ""}
+      ${meta.length ? `
+        <div style="display:flex;justify-content:center;gap:var(--space-2);
+                    flex-wrap:wrap;margin-bottom:var(--space-4)">
+          ${meta.map(m => `<span class="chip" style="cursor:default">${escHtml(m)}</span>`).join("")}
+        </div>` : ""}
+      <div class="divider" style="margin:var(--space-4) 0"></div>
+      <div style="text-align:left;margin-bottom:var(--space-4)">
+        <div style="font-size:10px;color:var(--text-light);text-transform:uppercase;
+                    letter-spacing:.05em;margin-bottom:4px">Estudios subidos</div>
+        <div style="font-size:26px;font-weight:700;color:var(--text);
+                    font-family:var(--font-display)">${totalStudies}</div>
       </div>
-
+      <div style="display:flex;flex-direction:column;gap:var(--space-2)">
+        <button class="btn-ghost" style="width:100%;justify-content:center"
+                onclick="openEditPatient()">
+          <i data-lucide="pencil" class="icon icon-sm" aria-hidden="true"></i>
+          Editar paciente
+        </button>
+        <button class="btn-ghost" style="width:100%;justify-content:center;color:var(--red)"
+                onclick="openDeletePatient()">
+          <i data-lucide="trash-2" class="icon icon-sm" aria-hidden="true"></i>
+          Eliminar
+        </button>
+      </div>
     </div>`;
-
   if (window.lucide) lucide.createIcons();
 }
 
-// ── Seccion de upload ─────────────────────────────────────────────────────────
-function renderUploadSection() {
-  const el = document.getElementById("upload-section");
+function renderAntecedentes() {
+  const el = document.getElementById("pac-antecedentes-card");
+  if (!el || state.loading || !state.patient) return;
+
+  const p = state.patient;
+  const fields = [
+    { label: "Padecimientos", val: p.padecimientos },
+    { label: "Alergias",      val: p.alergias },
+    { label: "Medicamentos",  val: p.medicamentos },
+    { label: "Notas",         val: p.notas },
+  ].filter(f => f.val);
+
+  if (!fields.length) return;
+
+  el.innerHTML = `
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:var(--space-2);
+                  margin-bottom:var(--space-4);font-weight:600;font-size:var(--fs-body);color:var(--text)">
+        <i data-lucide="notes-medical" class="icon icon-md" style="color:var(--crimson)" aria-hidden="true"></i>
+        Antecedentes
+      </div>
+      ${fields.map(f => `
+        <div style="margin-bottom:var(--space-3)">
+          <div style="font-size:10px;color:var(--text-light);text-transform:uppercase;
+                      letter-spacing:.05em;margin-bottom:3px">${f.label}</div>
+          <div style="font-size:var(--fs-sm);color:var(--text-muted);line-height:1.5">${escHtml(f.val)}</div>
+        </div>`).join("")}
+    </div>`;
+  if (window.lucide) lucide.createIcons();
+}
+
+// ── Gráfica de salud general ──────────────────────────────────────────────────
+function renderHealthChart() {
+  const el = document.getElementById("pac-health-chart");
+  if (!el) return;
+
+  if (state.loading) {
+    el.innerHTML = `
+      <div class="card">
+        <div class="skeleton skeleton-title" style="width:40%;margin-bottom:var(--space-4)"></div>
+        <div class="skeleton" style="height:80px;border-radius:var(--radius-md)"></div>
+      </div>`;
+    return;
+  }
+
+  if (!state.studies.length) { el.innerHTML = ""; return; }
+
+  // Calcular índice de salud por estudio (% de componentes en rango)
+  const sorted = [...state.studies].sort((a, b) =>
+    (a.fecha || "").localeCompare(b.fecha || "")
+  );
+
+  const dataPoints = sorted.map(s => {
+    const comps = s.components || [];
+    if (!comps.length) return null;
+    const normales = comps.filter(c => (c.status || "").toLowerCase() === "normal").length;
+    return { fecha: s.fecha, pct: Math.round((normales / comps.length) * 100) };
+  }).filter(Boolean);
+
+  if (!dataPoints.length) { el.innerHTML = ""; return; }
+
+  // Totales acumulados del último estudio
+  const lastStudy   = sorted[sorted.length - 1];
+  const allComps    = lastStudy.components || [];
+  const enRango     = allComps.filter(c => (c.status || "").toLowerCase() === "normal").length;
+  const fueraRango  = allComps.length - enRango;
+  const indiceActual = allComps.length ? Math.round((enRango / allComps.length) * 100) : null;
+
+  const summaryCards = indiceActual !== null ? `
+    <div style="display:flex;gap:var(--space-3);margin-bottom:var(--space-4)">
+      <div style="background:#EDFAF4;border-radius:var(--radius-md);padding:var(--space-3) var(--space-4);
+                  flex:1;text-align:center">
+        <div style="font-size:20px;font-weight:700;color:#1E7E4B">${enRango}</div>
+        <div style="font-size:10px;color:#1E7E4B;margin-top:2px">en rango</div>
+      </div>
+      <div style="background:#FEECEC;border-radius:var(--radius-md);padding:var(--space-3) var(--space-4);
+                  flex:1;text-align:center">
+        <div style="font-size:20px;font-weight:700;color:var(--red)">${fueraRango}</div>
+        <div style="font-size:10px;color:var(--red);margin-top:2px">fuera de rango</div>
+      </div>
+      <div style="background:var(--surface-tint);border-radius:var(--radius-md);
+                  padding:var(--space-3) var(--space-4);flex:1;text-align:center">
+        <div style="font-size:20px;font-weight:700;color:var(--text)">${indiceActual}%</div>
+        <div style="font-size:10px;color:var(--text-light);margin-top:2px">índice actual</div>
+      </div>
+    </div>` : "";
+
+  el.innerHTML = `
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:var(--space-2);
+                  margin-bottom:var(--space-4);font-weight:600;font-size:var(--fs-body);color:var(--text)">
+        <i data-lucide="heart-pulse" class="icon icon-md" style="color:var(--crimson)" aria-hidden="true"></i>
+        Tendencia de salud general
+        <span style="font-size:var(--fs-xs);color:var(--text-light);font-weight:400;margin-left:4px">
+          · % de componentes en rango por estudio
+        </span>
+      </div>
+      ${summaryCards}
+      <div style="position:relative;height:90px">
+        <canvas id="health-trend-chart"></canvas>
+      </div>
+      ${dataPoints.length < 2
+        ? `<p style="font-size:var(--fs-xs);color:var(--text-light);margin-top:var(--space-2);text-align:center">
+             Sube más estudios para ver la tendencia de salud evolucionar.
+           </p>`
+        : `<p style="font-size:var(--fs-xs);color:var(--text-light);margin-top:var(--space-2)">
+             El índice sube cuando más componentes están dentro del rango de referencia.
+           </p>`}
+    </div>`;
+
+  if (window.lucide) lucide.createIcons();
+
+  // Render con Chart.js después del paint
+  requestAnimationFrame(() => {
+    const canvas = document.getElementById("health-trend-chart");
+    if (!canvas || typeof Chart === "undefined") return;
+    const ctx = canvas.getContext("2d");
+
+    const labels = dataPoints.map(d => {
+      if (!d.fecha) return "";
+      const [y, m] = d.fecha.split("-");
+      return new Date(+y, +m - 1).toLocaleDateString("es-MX", { month: "short", year: "2-digit" });
+    });
+    const values = dataPoints.map(d => d.pct);
+
+    const grad = ctx.createLinearGradient(0, 0, 0, 90);
+    grad.addColorStop(0,   "rgba(192,57,43,0.12)");
+    grad.addColorStop(1,   "rgba(192,57,43,0.0)");
+
+    new Chart(canvas, {
+      type: "line",
+      data: {
+        labels,
+        datasets: [{
+          data: values,
+          borderColor:           "rgba(192,57,43,0.80)",
+          backgroundColor:       grad,
+          borderWidth:           2,
+          pointRadius:           4,
+          pointBackgroundColor:  "#fff",
+          pointBorderColor:      "rgba(192,57,43,0.80)",
+          pointBorderWidth:      2,
+          pointHoverRadius:      5,
+          tension:               0.35,
+          fill:                  true,
+        }],
+      },
+      options: {
+        responsive:          true,
+        maintainAspectRatio: false,
+        animation:           { duration: 500, easing: "easeOutQuart" },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: "#111318",
+            titleColor:      "#fff",
+            bodyColor:       "rgba(255,255,255,0.75)",
+            padding:         8,
+            cornerRadius:    6,
+            callbacks: { label: ctx => ` ${ctx.parsed.y}% en rango` },
+          },
+        },
+        scales: {
+          x: {
+            grid:   { display: false },
+            border: { display: false },
+            ticks:  { font: { size: 10 }, color: "#8891A0" },
+          },
+          y: {
+            min:    0,
+            max:    100,
+            border: { display: false, dash: [4, 4] },
+            ticks:  { stepSize: 25, font: { size: 10 }, color: "#8891A0",
+                      callback: v => `${v}%` },
+            grid:   { color: "rgba(228,230,234,0.6)" },
+          },
+        },
+      },
+    });
+  });
+}
+
+// ── Upload bar ────────────────────────────────────────────────────────────────
+function renderUploadBar() {
+  const el = document.getElementById("pac-upload-bar");
   if (!el || state.loading) return;
 
-  // Estado: analizando archivos
+  // Estado: analizando
   if (state.uploading) {
     const label = state.uploadTotal > 1
       ? `Analizando archivo ${state.uploadCurrent} de ${state.uploadTotal}...`
       : "Analizando PDF con IA...";
     el.innerHTML = `
-      <div class="card">
-        <div style="display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-4)">
-          <i data-lucide="loader-2" class="icon icon-md spin"
-             style="color:var(--crimson)" aria-hidden="true"></i>
-          <span style="font-weight:600;font-size:var(--fs-body);color:var(--text)">${label}</span>
+      <div class="card" style="padding:var(--space-4) var(--space-5)">
+        <div style="display:flex;align-items:center;gap:var(--space-4)">
+          <div style="width:40px;height:40px;border-radius:var(--radius-md);
+                      background:var(--crimson-50);display:flex;align-items:center;
+                      justify-content:center;flex-shrink:0">
+            <i data-lucide="loader-2" class="icon icon-md spin"
+               style="color:var(--crimson)" aria-hidden="true"></i>
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;justify-content:space-between;
+                        margin-bottom:var(--space-2)">
+              <span style="font-weight:600;font-size:var(--fs-body);color:var(--text)">${label}</span>
+              <span style="font-size:var(--fs-sm);color:var(--crimson);font-weight:600">
+                ${Math.round(state.uploadProgress)}%
+              </span>
+            </div>
+            <div class="progress-bar-track" style="margin:0;width:100%">
+              <div id="upload-bar-fill" class="progress-bar-fill"
+                   style="width:${state.uploadProgress}%"></div>
+            </div>
+            <p style="font-size:var(--fs-xs);color:var(--text-light);margin-top:var(--space-1)">
+              Extrayendo y clasificando componentes con IA · paso 2 de 3
+            </p>
+          </div>
         </div>
-        <div class="progress-bar-track" style="margin:0;width:100%">
-          <div id="upload-bar-fill" class="progress-bar-fill"
-               style="width:${state.uploadProgress}%"></div>
-        </div>
-        <p style="font-size:var(--fs-xs);color:var(--text-light);
-                  margin-top:var(--space-2);text-align:center">
-          Extrayendo componentes del laboratorio...
-        </p>
       </div>`;
     if (window.lucide) lucide.createIcons();
     return;
   }
 
-  // Estado: hay archivos en la cola
+  // Estado: archivos en cola
   if (state.pendingFiles.length > 0) {
-    const fileRows = state.pendingFiles.map(({ id, file }) => {
+    const n = state.pendingFiles.length;
+    const rows = state.pendingFiles.map(({ id, file }) => {
       const sizeKb = Math.round(file.size / 1024);
       return `
         <div style="display:flex;align-items:center;gap:var(--space-3);
-                    padding:var(--space-3) 0;border-bottom:1px solid var(--border)">
-          <div style="width:36px;height:36px;border-radius:var(--radius-md);
-                      background:var(--crimson-50);display:flex;align-items:center;
-                      justify-content:center;flex-shrink:0">
-            <i data-lucide="file-text" class="icon icon-sm"
-               style="color:var(--crimson)" aria-hidden="true"></i>
-          </div>
+                    padding:var(--space-2) 0;border-bottom:1px solid var(--border)">
+          <i data-lucide="file-text" class="icon icon-sm" style="color:var(--crimson);flex-shrink:0" aria-hidden="true"></i>
           <div style="flex:1;min-width:0">
             <p style="font-weight:600;font-size:var(--fs-sm);color:var(--text);
                       white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:0">
               ${escHtml(file.name)}
             </p>
-            <p style="font-size:var(--fs-xs);color:var(--text-light);margin:2px 0 0">
-              ${sizeKb} KB
-            </p>
+            <p style="font-size:var(--fs-xs);color:var(--text-light);margin:1px 0 0">${sizeKb} KB</p>
           </div>
-          <button class="btn-icon" aria-label="Quitar archivo"
-                  onclick="removePendingFile('${id}')">
+          <button class="btn-icon" aria-label="Quitar" onclick="removePendingFile('${id}')">
             <i data-lucide="x" class="icon icon-sm" aria-hidden="true"></i>
           </button>
         </div>`;
     }).join("");
 
-    const n = state.pendingFiles.length;
     el.innerHTML = `
-      <div class="card">
+      <div class="card" style="padding:var(--space-4) var(--space-5)">
         <div style="display:flex;align-items:center;justify-content:space-between;
-                    margin-bottom:var(--space-4)">
-          <span style="font-weight:700;font-size:var(--fs-body);color:var(--text)">
+                    margin-bottom:var(--space-3)">
+          <span style="font-weight:600;font-size:var(--fs-body);color:var(--text)">
             ${n} archivo${n !== 1 ? "s" : ""} listo${n !== 1 ? "s" : ""} para analizar
           </span>
           <label style="display:inline-flex;align-items:center;gap:var(--space-2);
-                        font-size:var(--fs-sm);color:var(--crimson);font-weight:600;
-                        cursor:pointer">
+                        font-size:var(--fs-sm);color:var(--crimson);font-weight:600;cursor:pointer">
             <i data-lucide="plus" class="icon icon-sm" aria-hidden="true"></i>
             Agregar más
             <input type="file" accept=".pdf,application/pdf" multiple style="display:none"
                    onchange="onFilesInput(this.files); this.value=''" />
           </label>
         </div>
-
-        <div style="max-height:220px;overflow-y:auto;margin-bottom:var(--space-5)">
-          ${fileRows}
-        </div>
-
+        <div style="max-height:180px;overflow-y:auto;margin-bottom:var(--space-3)">${rows}</div>
         <div style="display:flex;gap:var(--space-3)">
           <button class="btn-ghost" onclick="clearAllPending()">Cancelar</button>
           <button class="btn-primary" onclick="confirmUploadAll()">
@@ -441,28 +600,41 @@ function renderUploadSection() {
     return;
   }
 
-  // Estado normal: dropzone
+  // Estado normal: barra con dropzone integrado
   el.innerHTML = `
     <div
-      id="dz"
-      class="dropzone"
+      id="pac-upload-zone"
+      style="border:1.5px dashed var(--crimson-400);border-radius:var(--radius-lg);
+             padding:var(--space-4) var(--space-5);background:var(--crimson-50);
+             display:flex;align-items:center;gap:var(--space-4);cursor:pointer;
+             transition:border-color .15s,background .15s"
       role="button"
       tabindex="0"
-      aria-label="Subir PDFs de estudios de laboratorio"
+      aria-label="Subir estudios de laboratorio"
       onclick="document.getElementById('pdf-input').click()"
       ondragover="onDragOver(event)"
       ondragleave="onDragLeave()"
       ondrop="onDrop(event)"
       onkeydown="if(event.key==='Enter'||event.key===' ')document.getElementById('pdf-input').click()"
     >
-      <div class="dropzone-icon">
-        <i data-lucide="upload" class="icon"
-           style="width:48px;height:48px;stroke-width:1.5" aria-hidden="true"></i>
+      <div style="width:42px;height:42px;border-radius:var(--radius-md);
+                  background:rgba(192,57,43,0.12);display:flex;align-items:center;
+                  justify-content:center;flex-shrink:0">
+        <i data-lucide="upload" class="icon icon-md" style="color:var(--crimson)" aria-hidden="true"></i>
       </div>
-      <p class="dropzone-title">Sube estudios de laboratorio</p>
-      <p class="dropzone-sub">
-        Arrastra uno o varios PDFs aquí o haz clic para seleccionar &mdash; max. 20 MB por archivo
-      </p>
+      <div style="flex:1;min-width:0">
+        <p style="font-weight:600;font-size:var(--fs-body);color:var(--crimson);margin-bottom:2px">
+          Subir nuevo estudio de laboratorio
+        </p>
+        <p style="font-size:var(--fs-xs);color:var(--text-light);margin:0">
+          Arrastra un PDF aquí o haz clic · La IA lo analiza y clasifica automáticamente · máx. 20 MB
+        </p>
+      </div>
+      <button class="btn-primary" style="flex-shrink:0"
+              onclick="event.stopPropagation();document.getElementById('pdf-input').click()">
+        <i data-lucide="upload" class="icon icon-sm" aria-hidden="true"></i>
+        Seleccionar
+      </button>
     </div>
     <input id="pdf-input" type="file" accept=".pdf,application/pdf" multiple
            style="display:none" onchange="onFilesInput(this.files); this.value=''" />`;
@@ -470,284 +642,219 @@ function renderUploadSection() {
   if (window.lucide) lucide.createIcons();
 }
 
-// ── Resumen IA ────────────────────────────────────────────────────────────────
-const _aiSummaryState = { text: null, loading: false, error: null, loadedForCount: null };
+// ── Pestañas: Tipos / Archivos ────────────────────────────────────────────────
+function renderTabsSection() {
+  const el = document.getElementById("pac-tabs-section");
+  if (!el) return;
 
-function renderAiSummary() {
-  const el = document.getElementById("ai-summary-section");
-  if (!el || state.loading) return;
-
-  // Ocultar si no hay estudios o si estamos en el picker (sin categoría activa)
-  if (state.studies.length === 0 || state.activeCategory === null) {
-    el.innerHTML = "";
-    return;
-  }
-
-  // Si ya tenemos el resumen cargado para el mismo número de estudios, solo renderizarlo
-  if (_aiSummaryState.text !== null && _aiSummaryState.loadedForCount === state.studies.length) {
-    el.innerHTML = buildAiSummaryHtml(_aiSummaryState.text);
-    if (window.lucide) lucide.createIcons();
-    return;
-  }
-
-  // Si hay error previo, mostrar con opción de reintentar
-  if (_aiSummaryState.error && _aiSummaryState.loadedForCount === state.studies.length) {
+  if (state.loading) {
     el.innerHTML = `
-      <div class="card" style="border-left:3px solid var(--yellow)">
-        <div style="display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-3)">
-          <i data-lucide="bot" class="icon icon-md" style="color:var(--text-muted)" aria-hidden="true"></i>
-          <span style="font-weight:700;font-size:var(--fs-body);color:var(--text)">Resumen IA</span>
-          <span style="font-size:var(--fs-xs);color:var(--text-muted);padding:2px 8px;
-                       background:var(--surface-2);border-radius:999px">Generado con IA</span>
+      <div class="card">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:var(--space-3)">
+          ${[1,2,3,4].map(() => `
+            <div class="skeleton" style="height:72px;border-radius:var(--radius-md)"></div>`).join("")}
         </div>
-        <p style="font-size:var(--fs-sm);color:var(--text-muted);margin-bottom:var(--space-3)">
-          ${escHtml(_aiSummaryState.error)}
-        </p>
-        <button class="btn-ghost" onclick="refreshAiSummary()">
-          <i data-lucide="refresh-cw" class="icon icon-sm" aria-hidden="true"></i>
-          Reintentar
-        </button>
+      </div>`;
+    return;
+  }
+
+  const tabs = [
+    { id: "tipos",    icon: "layout-grid",  label: "Tipos de estudio" },
+    { id: "archivos", icon: "files",        label: "Todos los archivos" },
+  ];
+
+  const tabNav = tabs.map(t => `
+    <button
+      class="pac-tab${state.activeTab === t.id ? " pac-tab-active" : ""}"
+      onclick="switchTab('${t.id}')"
+    >
+      <i data-lucide="${t.icon}" class="icon icon-sm" aria-hidden="true"></i>
+      ${t.label}
+    </button>`).join("");
+
+  el.innerHTML = `
+    <div>
+      <div class="pac-tab-nav">${tabNav}</div>
+      <div id="pac-tab-body" class="pac-tab-body"></div>
+    </div>`;
+
+  if (window.lucide) lucide.createIcons();
+  renderActiveTab();
+}
+
+function switchTab(tabId) {
+  state.activeTab      = tabId;
+  state.activeCategory = null;
+  const navEl = document.querySelector(".pac-tab-nav");
+  if (navEl) {
+    navEl.querySelectorAll(".pac-tab").forEach(btn => {
+      btn.classList.toggle("pac-tab-active", btn.textContent.trim().includes(tabId === "tipos" ? "Tipos" : "archivos") ||
+        btn.getAttribute("onclick")?.includes(tabId));
+    });
+  }
+  renderActiveTab();
+  const panel = document.getElementById("pac-category-panel");
+  if (panel) panel.innerHTML = "";
+}
+
+function renderActiveTab() {
+  if (state.activeTab === "tipos") renderTiposTab();
+  else renderFilesTab();
+}
+
+// ── Tab: Tipos de estudio ─────────────────────────────────────────────────────
+function renderTiposTab() {
+  const el = document.getElementById("pac-tab-body");
+  if (!el) return;
+
+  if (!state.studies.length) {
+    el.innerHTML = `
+      <div style="padding:var(--space-8);text-align:center;color:var(--text-light)">
+        <i data-lucide="flask-conical" class="icon"
+           style="width:40px;height:40px;stroke-width:1.5;color:var(--crimson-200);margin-bottom:var(--space-3)"
+           aria-hidden="true"></i>
+        <p style="font-size:var(--fs-sm)">Sube el primer estudio para ver los tipos disponibles.</p>
       </div>`;
     if (window.lucide) lucide.createIcons();
     return;
   }
 
-  // Estado de carga
-  el.innerHTML = `
-    <div class="card">
-      <div style="display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-3)">
-        <i data-lucide="loader-2" class="icon icon-md spin"
-           style="color:var(--crimson)" aria-hidden="true"></i>
-        <span style="font-weight:700;font-size:var(--fs-body);color:var(--text)">
-          Generando resumen de estudios...
-        </span>
-        <span style="font-size:var(--fs-xs);color:var(--text-muted);padding:2px 8px;
-                     background:var(--surface-2);border-radius:999px">Generado con IA</span>
-      </div>
-      <div class="skeleton skeleton-text" style="width:90%"></div>
-      <div class="skeleton skeleton-text" style="width:75%;margin-top:8px"></div>
-      <div class="skeleton skeleton-text" style="width:85%;margin-top:8px"></div>
-    </div>`;
-  if (window.lucide) lucide.createIcons();
-
-  // Cargar resumen si no está en progreso
-  if (!_aiSummaryState.loading) {
-    _aiSummaryState.loading = true;
-    _aiSummaryState.error   = null;
-    const countAtLoad = state.studies.length;
-
-    apiFetch("/studies/summary", {
-      method: "POST",
-      body:   JSON.stringify({ patientId: state.patientId }),
-    }).then(async res => {
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || `Error ${res.status}`);
-      }
-      return res.json();
-    }).then(data => {
-      _aiSummaryState.text            = data.summary;
-      _aiSummaryState.loadedForCount  = countAtLoad;
-      _aiSummaryState.loading         = false;
-      const el2 = document.getElementById("ai-summary-section");
-      if (el2) {
-        el2.innerHTML = buildAiSummaryHtml(data.summary);
-        if (window.lucide) lucide.createIcons();
-      }
-    }).catch(err => {
-      _aiSummaryState.error           = err.message || "No se pudo generar el resumen.";
-      _aiSummaryState.loadedForCount  = countAtLoad;
-      _aiSummaryState.loading         = false;
-      renderAiSummary();
-    });
-  }
-}
-
-function refreshAiSummary() {
-  _aiSummaryState.text    = null;
-  _aiSummaryState.error   = null;
-  _aiSummaryState.loading = false;
-  _aiSummaryState.loadedForCount = null;
-  renderAiSummary();
-}
-
-function buildAiSummaryHtml(text) {
-  const escaped = text
-    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
-  // Split into lines, render bullet lines as <li>, rest as plain text
-  const items = escaped.split("\n")
-    .map(line => line.trim())
-    .filter(Boolean)
-    .map(line => {
-      const isBullet = line.startsWith("•") || line.startsWith("-");
-      const content  = line.replace(/^[•\-]\s*/, "")
-        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-        .replace(/↑/g, '<span style="color:var(--red)">↑</span>')
-        .replace(/↓/g, '<span style="color:var(--amber)">↓</span>');
-      return isBullet
-        ? `<li style="margin-bottom:var(--space-2);line-height:1.55">${content}</li>`
-        : `<p style="margin:0 0 var(--space-2)">${content}</p>`;
-    });
-
-  const body = items.some(l => l.startsWith("<li"))
-    ? `<ul style="margin:0;padding-left:var(--space-5);list-style:disc">${items.join("")}</ul>`
-    : items.join("");
-
-  return `
-    <div class="card" style="border-left:3px solid var(--crimson)">
-      <div style="display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-4)">
-        <i data-lucide="bot" class="icon icon-md" style="color:var(--crimson)" aria-hidden="true"></i>
-        <span style="font-weight:700;font-size:var(--fs-body);color:var(--text)">Resumen de estudios</span>
-        <span style="font-size:var(--fs-xs);color:var(--crimson);padding:2px 8px;
-                     background:var(--crimson-50);border-radius:999px;font-weight:600">
-          ✦ Generado con IA
-        </span>
-        <button class="btn-icon" style="margin-left:auto" title="Actualizar resumen"
-                onclick="refreshAiSummary()">
-          <i data-lucide="refresh-cw" class="icon icon-sm" aria-hidden="true"></i>
-        </button>
-      </div>
-      <div style="font-size:var(--fs-sm);color:var(--text)">
-        ${body}
-      </div>
-      <p style="font-size:var(--fs-xs);color:var(--text-muted);margin-top:var(--space-4);
-                padding-top:var(--space-3);border-top:1px solid var(--border)">
-        Generado automáticamente a partir de los datos extraídos del estudio. No constituye consejo médico.
-      </p>
-    </div>`;
-}
-
-// ── Selector de categorías ────────────────────────────────────────────────────
-function renderCategorySection() {
-  const el = document.getElementById("category-section");
-  if (!el) return;
-
-  if (state.loading) { el.innerHTML = ""; return; }
-
-  if (state.studies.length === 0) { el.innerHTML = ""; return; }
-
-  if (state.activeCategory === null) {
-    // Mostrar el picker de categorías
-    renderCategoryPicker(el);
-  } else {
-    // Mostrar contenido filtrado + botón de volver
-    renderCategoryContent(el);
-  }
-}
-
-function renderCategoryPicker(el) {
-  // Agrupar a nivel de componente (un estudio puede aparecer en varias categorías)
   const categoryMap = buildCategoryMap(state.studies);
 
-  const cards = [...categoryMap.entries()].map(([catName, { studies: catStudies, componentCount }]) => {
-    const meta    = getPanelMeta(catName);
-    const isNew   = state.recentCategories.has(catName);
-    const count   = catStudies.length;
+  const chips = [...categoryMap.entries()].map(([catName, { studies: catStudies, componentCount }]) => {
+    const meta   = getPanelMeta(catName);
+    const isNew  = state.recentCategories.has(catName);
+    const count  = catStudies.length;
+    const isActive = state.activeCategory === catName;
+
     return `
       <button
-        class="card"
-        data-category="${escHtml(catName)}"
-        onclick="selectCategory(this.dataset.category)"
-        style="
-          text-align:left;border:none;cursor:pointer;
-          padding:var(--space-5);
-          display:flex;flex-direction:column;gap:var(--space-3);
-          transition:box-shadow .15s,transform .15s;
-          border-left:4px solid ${meta.color};
-          ${isNew ? `outline:2px solid ${meta.color};outline-offset:2px;` : ""}
-        "
-        onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='var(--shadow-md)'"
-        onmouseleave="this.style.transform='';this.style.boxShadow=''"
+        class="pac-cat-chip${isActive ? " pac-cat-chip-active" : ""}"
+        onclick="selectCategory('${escAttr(catName)}')"
+        title="${escHtml(catName)}"
       >
-        <div style="display:flex;align-items:center;gap:var(--space-3)">
-          <span style="
-            width:40px;height:40px;border-radius:10px;flex-shrink:0;
-            background:${meta.color}18;display:flex;align-items:center;justify-content:center;
-          ">
-            <i data-lucide="${meta.icon}" style="width:20px;height:20px;stroke-width:1.75;color:${meta.color}" aria-hidden="true"></i>
-          </span>
-          <div style="min-width:0;flex:1">
-            <div style="display:flex;align-items:center;gap:var(--space-2)">
-              <p style="font-weight:700;font-size:var(--fs-body);color:var(--text);margin:0;line-height:1.3">
-                ${escHtml(catName)}
-              </p>
-              ${isNew ? `<span style="font-size:10px;font-weight:700;color:#fff;
-                background:${meta.color};border-radius:999px;padding:1px 7px;letter-spacing:.3px">
-                NUEVO
-              </span>` : ""}
-            </div>
-            <p style="font-size:var(--fs-xs);color:var(--text-muted);margin:3px 0 0">
-              ${count} estudio${count !== 1 ? "s" : ""} · ${componentCount} componente${componentCount !== 1 ? "s" : ""}
-            </p>
-          </div>
-          <i data-lucide="chevron-right" style="width:18px;height:18px;color:var(--text-light);flex-shrink:0" aria-hidden="true"></i>
+        <div class="pac-cat-icon" style="background:${meta.color}18">
+          <i data-lucide="${meta.icon}" style="color:${meta.color};width:16px;height:16px;stroke-width:1.75"
+             aria-hidden="true"></i>
         </div>
+        <div class="pac-cat-name">${escHtml(catName)}</div>
+        <div class="pac-cat-count">${count} estudio${count !== 1 ? "s" : ""}</div>
+        ${isNew ? `<span class="pac-cat-badge-new">NUEVO</span>` : ""}
       </button>`;
   }).join("");
 
   el.innerHTML = `
-    <div style="margin-bottom:var(--space-4)">
-      <h2 style="font-family:var(--font-display);font-size:var(--fs-h2);color:var(--text);margin-bottom:var(--space-2)">
-        Tipos de estudio
-      </h2>
-      <p style="font-size:var(--fs-sm);color:var(--text-muted)">
-        Selecciona una categoría para ver los estudios, tabla comparativa y gráficas de tendencia.
-      </p>
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:var(--space-4)">
-      ${cards}
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
+                gap:var(--space-3);padding:var(--space-4)">
+      ${chips}
     </div>`;
 
   if (window.lucide) lucide.createIcons();
 }
 
-function renderCategoryContent(el) {
-  const meta = getPanelMeta(state.activeCategory);
-  el.innerHTML = `
-    <div style="display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-6)">
-      <button
-        class="btn-icon"
-        onclick="selectCategory(null)"
-        title="Volver a categorías"
-        aria-label="Volver a categorías"
-        style="border:1px solid var(--border)"
-      >
-        <i data-lucide="arrow-left" class="icon icon-md" aria-hidden="true"></i>
-      </button>
-      <span style="
-        width:36px;height:36px;border-radius:9px;flex-shrink:0;
-        background:${meta.color}18;display:flex;align-items:center;justify-content:center;
-      ">
-        <i data-lucide="${meta.icon}" style="width:18px;height:18px;stroke-width:1.75;color:${meta.color}" aria-hidden="true"></i>
-      </span>
-      <h2 style="font-family:var(--font-display);font-size:var(--fs-h2);color:var(--text);margin:0">
-        ${escHtml(state.activeCategory)}
-      </h2>
-    </div>`;
+// ── Tab: Todos los archivos ───────────────────────────────────────────────────
+function renderFilesTab() {
+  const el = document.getElementById("pac-tab-body");
+  if (!el) return;
 
-  if (window.lucide) lucide.createIcons();
-  renderStudiesSection();
-}
-
-function selectCategory(categoryName) {
-  state.activeCategory = categoryName;
-  state.expandedId     = null;
-  // Al volver al picker manualmente (sin upload), limpiar badges "NUEVO"
-  if (categoryName === null) state.recentCategories = new Set();
-  render();
-}
-
-// ── Seccion de estudios ───────────────────────────────────────────────────────
-function renderStudiesSection() {
-  const el = document.getElementById("studies-section");
-  if (!el || state.loading || state.activeCategory === null) {
-    if (el) el.innerHTML = "";
+  if (!state.studies.length) {
+    el.innerHTML = `
+      <div style="padding:var(--space-8);text-align:center;color:var(--text-light)">
+        <i data-lucide="files" class="icon"
+           style="width:40px;height:40px;stroke-width:1.5;color:var(--crimson-200);margin-bottom:var(--space-3)"
+           aria-hidden="true"></i>
+        <p style="font-size:var(--fs-sm)">No hay archivos subidos todavía.</p>
+      </div>`;
+    if (window.lucide) lucide.createIcons();
     return;
   }
 
-  // Filtrar estudios por categoría activa a nivel de componente
-  const cat = state.activeCategory;
+  const rows = state.studies.map(s => {
+    const summary = getStudySummary(s);
+    const altered = summary.altos + summary.bajos;
+
+    // Categoría principal del estudio (la que tiene más componentes)
+    const catCounts = new Map();
+    for (const comp of (s.components || [])) {
+      const cat = classifyComponent(comp);
+      catCounts.set(cat, (catCounts.get(cat) || 0) + 1);
+    }
+    let mainCat = null, maxCount = 0;
+    for (const [cat, cnt] of catCounts) if (cnt > maxCount) { maxCount = cnt; mainCat = cat; }
+    const meta = mainCat ? getPanelMeta(mainCat) : null;
+
+    const altBadge = altered > 0
+      ? `<span style="font-size:10px;font-weight:600;background:#FEECEC;color:var(--red);
+                      padding:2px 8px;border-radius:999px">${altered} alterado${altered !== 1 ? "s" : ""}</span>`
+      : summary.total > 0
+        ? `<span style="font-size:10px;font-weight:600;background:#EDFAF4;color:#1E7E4B;
+                        padding:2px 8px;border-radius:999px">Todo normal</span>`
+        : "";
+
+    return `
+      <div style="display:flex;align-items:center;gap:var(--space-3);
+                  padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--border)">
+        <i data-lucide="file-text" class="icon icon-md"
+           style="color:var(--crimson);flex-shrink:0" aria-hidden="true"></i>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:var(--fs-sm);color:var(--text);
+                      white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+            ${escHtml(s.filename || "Estudio")}
+          </div>
+          <div style="font-size:var(--fs-xs);color:var(--text-light);margin-top:2px;
+                      display:flex;align-items:center;gap:var(--space-2);flex-wrap:wrap">
+            ${s.fecha ? escHtml(formatDate(s.fecha)) : "Sin fecha"}
+            · ${summary.total} componente${summary.total !== 1 ? "s" : ""}
+            ${meta ? `· <span style="background:${meta.color}18;color:${meta.color};
+                             font-size:10px;font-weight:600;padding:1px 7px;
+                             border-radius:999px">${escHtml(mainCat)}</span>` : ""}
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:var(--space-2);flex-shrink:0">
+          ${altBadge}
+          <button class="btn-icon" style="color:var(--red)"
+                  aria-label="Eliminar estudio"
+                  onclick="confirmDeleteStudy('${s.id}')">
+            <i data-lucide="trash-2" class="icon icon-sm" aria-hidden="true"></i>
+          </button>
+        </div>
+      </div>`;
+  }).join("");
+
+  el.innerHTML = `
+    <div>
+      ${rows}
+    </div>`;
+
+  if (window.lucide) lucide.createIcons();
+}
+
+// ── Panel inline de categoría ─────────────────────────────────────────────────
+const _aiSummaryState = { text: null, loading: false, error: null, loadedForCount: null, forCategory: null };
+
+function selectCategory(catName) {
+  if (state.activeCategory === catName) {
+    // Toggle: cerrar si ya está abierta
+    state.activeCategory = null;
+    state.openCharts     = new Set();
+    const panel = document.getElementById("pac-category-panel");
+    if (panel) panel.innerHTML = "";
+    renderTiposTab();
+    return;
+  }
+
+  state.activeCategory = catName;
+  state.openCharts     = new Set();
+  renderTiposTab();
+  renderCategoryPanel();
+}
+
+function renderCategoryPanel() {
+  const el = document.getElementById("pac-category-panel");
+  if (!el || !state.activeCategory) { if (el) el.innerHTML = ""; return; }
+
+  const cat     = state.activeCategory;
+  const meta    = getPanelMeta(cat);
   const filtered = state.studies
     .map(s => ({
       ...s,
@@ -755,154 +862,246 @@ function renderStudiesSection() {
     }))
     .filter(s => s.components.length > 0);
 
-  const count = filtered.length;
-
-  el.innerHTML = `
-    <div style="display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-4)">
-      <h2 style="font-family:var(--font-display);font-size:var(--fs-h2);color:var(--text)">
-        Estudios
-      </h2>
-      ${count > 0 ? `<span class="badge-count">${count}</span>` : ""}
-    </div>
-    <div id="studies-list"></div>`;
-
-  renderStudiesList(filtered);
-  renderPivotTable(filtered, "pivot-section");
-  renderGraficas(filtered, "graficas-section", state.patient?.nombre || "");
-}
-
-function renderStudiesList(studies) {
-  const el = document.getElementById("studies-list");
-  if (!el) return;
-
-  const list = studies ?? state.studies;
-
-  if (list.length === 0) {
+  if (!filtered.length) {
     el.innerHTML = `
-      <div class="empty-state" style="padding:60px var(--space-8)">
-        <div class="empty-state-icon">
-          <i data-lucide="flask-conical" class="icon"
-             style="width:48px;height:48px;stroke-width:1.5;color:var(--crimson-200)"
-             aria-hidden="true"></i>
-        </div>
-        <h2 style="font-size:var(--fs-h3)">Sin estudios aun</h2>
-        <p style="font-size:var(--fs-sm)">
-          Sube el primer PDF de laboratorio para comenzar el historial clinico.
+      <div class="card" style="border-top:2px solid ${meta.color};text-align:center;
+                               padding:var(--space-6)">
+        <p style="color:var(--text-light);font-size:var(--fs-sm)">
+          No hay componentes de "${escHtml(cat)}" en los estudios.
         </p>
       </div>`;
-    if (window.lucide) lucide.createIcons();
     return;
   }
 
-  el.innerHTML = list.map(studyRow).join("");
+  el.innerHTML = `
+    <div class="card" style="border-top:2px solid ${meta.color};padding:0;overflow:hidden">
 
-  // Inyectar componentes del estudio expandido
-  if (state.expandedId) {
-    const study     = list.find(s => s.id === state.expandedId);
-    const container = document.getElementById(`comp-${state.expandedId}`);
-    if (study && container) renderComponentCards(study, container);
-  }
-
-  if (window.lucide) lucide.createIcons();
-}
-
-function studyRow(s) {
-  const summary  = getStudySummary(s);
-  const expanded = state.expandedId === s.id;
-  const altered  = summary.altos + summary.bajos;
-
-  const altBadge = altered > 0
-    ? `<span class="badge-status alto">${altered} alterado${altered !== 1 ? "s" : ""}</span>`
-    : summary.total > 0
-      ? `<span class="badge-status normal">Todo normal</span>`
-      : `<span class="badge-status nd">Sin datos</span>`;
-
-  return `
-    <div class="card" style="padding:0;margin-bottom:var(--space-3);overflow:hidden">
-
-      <!-- Fila principal (clickable) -->
-      <div
-        style="display:flex;align-items:center;gap:var(--space-4);
-               padding:16px 20px;cursor:pointer;user-select:none"
-        onclick="toggleStudy('${s.id}')"
-        role="button" tabindex="0"
-        aria-expanded="${expanded}"
-        onkeydown="if(event.key==='Enter'||event.key===' ')toggleStudy('${s.id}')"
-      >
-        <!-- Icono -->
-        <div style="width:42px;height:42px;border-radius:var(--radius-md);
-                    background:var(--crimson-50);display:flex;align-items:center;
+      <!-- Header del panel -->
+      <div style="display:flex;align-items:center;gap:var(--space-3);
+                  padding:var(--space-4) var(--space-5);border-bottom:1px solid var(--border)">
+        <div style="width:34px;height:34px;border-radius:var(--radius-md);
+                    background:${meta.color}18;display:flex;align-items:center;
                     justify-content:center;flex-shrink:0">
-          <i data-lucide="flask-conical" class="icon icon-md"
-             style="color:var(--crimson)" aria-hidden="true"></i>
+          <i data-lucide="${meta.icon}" style="width:16px;height:16px;stroke-width:1.75;color:${meta.color}"
+             aria-hidden="true"></i>
         </div>
-
-        <!-- Fecha y laboratorio -->
-        <div style="flex:1;min-width:0">
-          <div style="font-weight:600;font-size:var(--fs-body);color:var(--text)">
-            ${escHtml(s.fecha ? formatDate(s.fecha) : "Sin fecha")}
-          </div>
-          <div style="font-size:var(--fs-sm);color:var(--text-light);margin-top:2px">
-            ${escHtml(s.labName || "Laboratorio")}
-            &ensp;&middot;&ensp;
-            ${summary.total} componente${summary.total !== 1 ? "s" : ""}
+        <div>
+          <div style="font-weight:700;font-size:var(--fs-body);color:var(--text)">${escHtml(cat)}</div>
+          <div style="font-size:var(--fs-xs);color:var(--text-light)">
+            ${filtered.length} estudio${filtered.length !== 1 ? "s" : ""} encontrado${filtered.length !== 1 ? "s" : ""}
           </div>
         </div>
-
-        <!-- Badge de estado -->
-        <div style="flex-shrink:0">${altBadge}</div>
-
-        <!-- Acciones (no propagan el click al row) -->
-        <div style="display:flex;align-items:center;gap:4px;flex-shrink:0"
-             onclick="event.stopPropagation()">
-          <button class="btn-icon" style="color:var(--red)"
-                  aria-label="Eliminar estudio" title="Eliminar"
-                  onclick="confirmDeleteStudy('${s.id}')">
-            <i data-lucide="trash-2" class="icon icon-md" aria-hidden="true"></i>
-          </button>
-          <i data-lucide="${expanded ? "chevron-up" : "chevron-down"}"
-             class="icon icon-md" style="color:var(--text-light)" aria-hidden="true"></i>
-        </div>
+        <button class="btn-icon" style="margin-left:auto;border:1px solid var(--border)"
+                onclick="selectCategory('${escAttr(cat)}')" aria-label="Cerrar panel">
+          <i data-lucide="x" class="icon icon-sm" aria-hidden="true"></i>
+        </button>
       </div>
 
-      <!-- Panel de componentes (visible al expandir) -->
-      ${expanded ? `
-        <div style="border-top:1px solid var(--border);padding:20px 20px 24px">
-          <div id="comp-${s.id}"></div>
-        </div>` : ""}
+      <!-- Resumen IA -->
+      <div id="pac-ai-summary" style="padding:var(--space-4) var(--space-5);
+                                       border-bottom:1px solid var(--border)">
+        ${buildAiSummaryLoading()}
+      </div>
+
+      <!-- Filtros + Tabla pivote -->
+      <div style="padding:var(--space-4) var(--space-5)">
+        <div style="display:flex;align-items:center;justify-content:space-between;
+                    margin-bottom:var(--space-3);flex-wrap:wrap;gap:var(--space-2)">
+          <div style="font-weight:600;font-size:var(--fs-body);color:var(--text);
+                      display:flex;align-items:center;gap:var(--space-2)">
+            <i data-lucide="table-2" class="icon icon-sm" aria-hidden="true"></i>
+            Tabla comparativa
+          </div>
+          <div style="display:flex;gap:var(--space-2)" id="pivot-filter-btns">
+            <button class="btn-ghost pivot-filter-btn pivot-filter-active"
+                    style="font-size:var(--fs-xs);padding:4px 12px"
+                    onclick="setPivotFilter('todos')">Todos</button>
+            <button class="btn-ghost pivot-filter-btn"
+                    style="font-size:var(--fs-xs);padding:4px 12px"
+                    onclick="setPivotFilter('alterados')">Fuera de rango</button>
+          </div>
+        </div>
+        <div id="pac-pivot-section"></div>
+      </div>
+
+      <!-- Gráficas individuales -->
+      <div id="pac-graficas-section" style="padding:0 var(--space-5) var(--space-5)"></div>
 
     </div>`;
+
+  if (window.lucide) lucide.createIcons();
+
+  // Render tabla y gráficas reutilizando funciones existentes
+  renderPivotTable(filtered, "pac-pivot-section");
+  renderGraficas(filtered, "pac-graficas-section", state.patient?.nombre || "");
+
+  // Cargar resumen IA
+  loadAiSummaryForCategory(cat, filtered);
 }
 
-// ── Interacciones ─────────────────────────────────────────────────────────────
-function toggleStudy(id) {
-  state.expandedId = state.expandedId === id ? null : id;
-  renderStudiesList();
+// ── Resumen IA ────────────────────────────────────────────────────────────────
+function buildAiSummaryLoading() {
+  return `
+    <div style="display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-3)">
+      <i data-lucide="loader-2" class="icon icon-sm spin" style="color:var(--crimson)" aria-hidden="true"></i>
+      <span style="font-weight:600;font-size:var(--fs-sm);color:var(--text)">Generando análisis IA...</span>
+      <span style="font-size:10px;color:var(--crimson);padding:2px 8px;
+                   background:var(--crimson-50);border-radius:999px;font-weight:600">✦ IA</span>
+    </div>
+    <div class="skeleton skeleton-text" style="width:90%"></div>
+    <div class="skeleton skeleton-text" style="width:75%;margin-top:6px"></div>
+    <div class="skeleton skeleton-text" style="width:82%;margin-top:6px"></div>`;
 }
 
-function confirmDeleteStudy(id) {
-  const study = state.studies.find(s => s.id === id);
-  const label = study?.fecha ? formatDate(study.fecha) : "este estudio";
-  if (confirm(`Eliminar el estudio del ${label}?\nEsta accion no se puede deshacer.`)) {
-    apiDeleteStudy(id);
+function loadAiSummaryForCategory(cat, filteredStudies) {
+  if (_aiSummaryState.loading) return;
+
+  // Reusar si ya tenemos el resumen para esta categoría y mismo número de estudios
+  if (_aiSummaryState.text &&
+      _aiSummaryState.forCategory === cat &&
+      _aiSummaryState.loadedForCount === filteredStudies.length) {
+    const el = document.getElementById("pac-ai-summary");
+    if (el) { el.innerHTML = buildAiSummaryHtml(_aiSummaryState.text); if (window.lucide) lucide.createIcons(); }
+    return;
+  }
+
+  _aiSummaryState.loading     = true;
+  _aiSummaryState.error       = null;
+  _aiSummaryState.forCategory = cat;
+  const countAtLoad = filteredStudies.length;
+
+  apiFetch("/studies/summary", {
+    method: "POST",
+    body:   JSON.stringify({ patientId: state.patientId }),
+  }).then(async res => {
+    if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.error || `Error ${res.status}`); }
+    return res.json();
+  }).then(data => {
+    _aiSummaryState.text            = data.summary;
+    _aiSummaryState.loadedForCount  = countAtLoad;
+    _aiSummaryState.loading         = false;
+    const el = document.getElementById("pac-ai-summary");
+    if (el) { el.innerHTML = buildAiSummaryHtml(data.summary); if (window.lucide) lucide.createIcons(); }
+  }).catch(err => {
+    _aiSummaryState.error           = err.message || "No se pudo generar el resumen.";
+    _aiSummaryState.loading         = false;
+    const el = document.getElementById("pac-ai-summary");
+    if (el) {
+      el.innerHTML = `
+        <div style="display:flex;align-items:center;gap:var(--space-3)">
+          <i data-lucide="alert-circle" class="icon icon-sm" style="color:var(--amber)" aria-hidden="true"></i>
+          <span style="font-size:var(--fs-sm);color:var(--text-muted)">${escHtml(_aiSummaryState.error)}</span>
+          <button class="btn-ghost" style="font-size:var(--fs-xs);margin-left:auto"
+                  onclick="loadAiSummaryForCategory('${escAttr(cat)}', [])">
+            <i data-lucide="refresh-cw" class="icon icon-sm" aria-hidden="true"></i> Reintentar
+          </button>
+        </div>`;
+      if (window.lucide) lucide.createIcons();
+    }
+  });
+}
+
+function buildAiSummaryHtml(text) {
+  const escaped = text
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  const items = escaped.split("\n")
+    .map(line => line.trim()).filter(Boolean)
+    .map(line => {
+      const isBullet = line.startsWith("•") || line.startsWith("-");
+      const content  = line.replace(/^[•\-]\s*/, "")
+        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+        .replace(/↑/g, `<span style="color:var(--red)">↑</span>`)
+        .replace(/↓/g, `<span style="color:var(--amber)">↓</span>`);
+      return isBullet
+        ? `<li style="margin-bottom:6px;line-height:1.55">${content}</li>`
+        : `<p style="margin:0 0 6px">${content}</p>`;
+    });
+
+  const body = items.some(l => l.startsWith("<li"))
+    ? `<ul style="margin:0;padding-left:var(--space-5);list-style:disc">${items.join("")}</ul>`
+    : items.join("");
+
+  return `
+    <div style="display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-3)">
+      <i data-lucide="sparkles" class="icon icon-sm" style="color:var(--crimson)" aria-hidden="true"></i>
+      <span style="font-weight:600;font-size:var(--fs-sm);color:var(--text)">Análisis IA</span>
+      <span style="font-size:10px;color:var(--crimson);padding:2px 8px;
+                   background:var(--crimson-50);border-radius:999px;font-weight:600">✦ IA</span>
+      <button class="btn-icon" style="margin-left:auto" title="Actualizar"
+              onclick="refreshAiSummary()">
+        <i data-lucide="refresh-cw" class="icon icon-sm" aria-hidden="true"></i>
+      </button>
+    </div>
+    <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6">${body}</div>
+    <p style="font-size:10px;color:var(--text-light);margin-top:var(--space-3);
+              padding-top:var(--space-2);border-top:1px solid var(--border)">
+      Generado automáticamente · No constituye consejo médico.
+    </p>`;
+}
+
+function refreshAiSummary() {
+  _aiSummaryState.text    = null;
+  _aiSummaryState.error   = null;
+  _aiSummaryState.loading = false;
+  _aiSummaryState.loadedForCount = null;
+  const el = document.getElementById("pac-ai-summary");
+  if (el && state.activeCategory) {
+    el.innerHTML = buildAiSummaryLoading();
+    if (window.lucide) lucide.createIcons();
+    const filtered = state.studies
+      .map(s => ({ ...s, components: (s.components || []).filter(c => classifyComponent(c) === state.activeCategory) }))
+      .filter(s => s.components.length > 0);
+    loadAiSummaryForCategory(state.activeCategory, filtered);
   }
 }
 
-// ── Manejo de archivos ────────────────────────────────────────────────────────
+// ── Filtro de tabla pivote (Todos / Fuera de rango) ──────────────────────────
+let _pivotFilter = "todos";
 
+function setPivotFilter(filter) {
+  _pivotFilter = filter;
+
+  // Actualizar botones activos
+  document.querySelectorAll(".pivot-filter-btn").forEach(btn => {
+    const isActive = btn.getAttribute("onclick")?.includes(filter);
+    btn.classList.toggle("pivot-filter-active", isActive);
+  });
+
+  // Re-render tabla con el filtro
+  if (!state.activeCategory) return;
+  const cat = state.activeCategory;
+  let filtered = state.studies
+    .map(s => ({
+      ...s,
+      components: (s.components || []).filter(c => classifyComponent(c) === cat),
+    }))
+    .filter(s => s.components.length > 0);
+
+  if (filter === "alterados") {
+    filtered = filtered.map(s => ({
+      ...s,
+      components: s.components.filter(c => {
+        const st = (c.status || "").toLowerCase();
+        return st === "alto" || st === "bajo";
+      }),
+    })).filter(s => s.components.length > 0);
+  }
+
+  renderPivotTable(filtered, "pac-pivot-section");
+}
+
+// ── Interacciones de archivos ─────────────────────────────────────────────────
 function validateFile(file) {
   if (file.type !== "application/pdf") return "Solo se aceptan archivos PDF.";
-  if (file.size > 20 * 1024 * 1024) return "El archivo supera el límite de 20 MB.";
+  if (file.size > 20 * 1024 * 1024)   return "El archivo supera el límite de 20 MB.";
   return null;
 }
 
 function onFilesInput(fileList) {
   if (!fileList || fileList.length === 0) return;
-
   const existingNames = new Set(state.pendingFiles.map(p => p.file.name));
-  let rejected = 0;
-  let duplicates = 0;
-
+  let rejected = 0, duplicates = 0;
   for (const file of Array.from(fileList)) {
     const err = validateFile(file);
     if (err) { showToast(`${file.name}: ${err}`, "error"); rejected++; continue; }
@@ -910,36 +1109,77 @@ function onFilesInput(fileList) {
     state.pendingFiles.push({ id: crypto.randomUUID(), file });
     existingNames.add(file.name);
   }
-
-  if (duplicates > 0) {
+  if (duplicates > 0)
     showToast(`${duplicates} archivo${duplicates !== 1 ? "s" : ""} ya estaba${duplicates !== 1 ? "n" : ""} en la lista.`, "error");
-  }
-
-  renderUploadSection();
+  renderUploadBar();
 }
 
 function removePendingFile(id) {
   state.pendingFiles = state.pendingFiles.filter(p => p.id !== id);
-  renderUploadSection();
+  renderUploadBar();
 }
 
 function clearAllPending() {
   state.pendingFiles = [];
-  renderUploadSection();
+  renderUploadBar();
 }
 
 function onDragOver(e) {
   e.preventDefault();
-  document.getElementById("dz")?.classList.add("drag-over");
+  document.getElementById("pac-upload-zone")?.classList.add("drag-over");
 }
 function onDragLeave() {
-  document.getElementById("dz")?.classList.remove("drag-over");
+  document.getElementById("pac-upload-zone")?.classList.remove("drag-over");
 }
 function onDrop(e) {
   e.preventDefault();
-  document.getElementById("dz")?.classList.remove("drag-over");
+  document.getElementById("pac-upload-zone")?.classList.remove("drag-over");
   if (e.dataTransfer?.files?.length) onFilesInput(e.dataTransfer.files);
 }
 
-// ── Arranque ──────────────────────────────────────────────────────────────────
+function confirmDeleteStudy(id) {
+  const study = state.studies.find(s => s.id === id);
+  const label = study?.fecha ? formatDate(study.fecha) : "este estudio";
+  if (confirm(`¿Eliminar el estudio del ${label}?\nEsta acción no se puede deshacer.`))
+    apiDeleteStudy(id);
+}
+
+// ── Editar / Eliminar paciente (stubs — usan modal existente de pacientes) ────
+function openEditPatient() {
+  showToast("Edita este paciente desde el directorio de pacientes.", "");
+}
+function openDeletePatient() {
+  if (confirm("¿Eliminar este paciente y todos sus estudios? Esta acción no se puede deshacer.")) {
+    apiFetch(`/patients/${state.patientId}`, { method: "DELETE" })
+      .then(r => {
+        if (r.ok || r.status === 204) window.location.replace("/pacientes.html");
+        else showToast("No se pudo eliminar el paciente.", "error");
+      }).catch(() => showToast("Error de red.", "error"));
+  }
+}
+
+// ── Utilidades ────────────────────────────────────────────────────────────────
+function formatDate(dateStr) {
+  if (!dateStr) return "—";
+  try {
+    return new Date(dateStr).toLocaleDateString("es-MX", {
+      day: "numeric", month: "short", year: "numeric",
+    });
+  } catch (_) { return dateStr; }
+}
+
+function escHtml(str) {
+  return String(str ?? "")
+    .replace(/&/g,  "&amp;")
+    .replace(/</g,  "&lt;")
+    .replace(/>/g,  "&gt;")
+    .replace(/"/g,  "&quot;")
+    .replace(/'/g,  "&#39;");
+}
+
+function escAttr(str) {
+  return String(str ?? "").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", init);

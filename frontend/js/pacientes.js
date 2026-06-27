@@ -107,8 +107,18 @@ function renderList() {
   // Skeleton mientras carga
   if (state.loading) {
     listEl.innerHTML = `
-      <div style="display:flex;flex-direction:column;gap:var(--space-2)">
-        ${[1, 2, 3, 4, 5].map(() => `<div class="skeleton skeleton-row"></div>`).join("")}
+      <div class="pac-grid">
+        ${[1,2,3,4,5,6].map(() => `
+          <div class="pac-card-skeleton">
+            <div style="display:flex;justify-content:space-between">
+              <div class="skeleton" style="width:48px;height:48px;border-radius:50%"></div>
+              <div class="skeleton skeleton-text" style="width:80px"></div>
+            </div>
+            <div class="skeleton skeleton-title" style="width:70%"></div>
+            <div class="skeleton skeleton-text" style="width:50%"></div>
+            <div class="skeleton skeleton-text" style="width:90%"></div>
+            <div class="skeleton skeleton-text" style="width:60%"></div>
+          </div>`).join("")}
       </div>`;
     if (countEl) countEl.textContent = "Cargando...";
     return;
@@ -168,80 +178,83 @@ function renderList() {
     return;
   }
 
-  // Lista de pacientes
-  listEl.innerHTML = `
-    <div style="display:flex;flex-direction:column;gap:var(--space-2)">
-      ${filtered.map(patientRow).join("")}
-    </div>`;
+  // Grid de tarjetas
+  listEl.innerHTML = `<div class="pac-grid">${filtered.map(patientCard).join("")}</div>`;
   if (window.lucide) lucide.createIcons();
 }
 
-function patientRow(p) {
-  const initial  = (p.nombre || "?")[0].toUpperCase();
-  const meta     = [
-    p.edad ? `${p.edad} años` : null,
-    p.sexo || null,
-  ].filter(Boolean).join(" · ");
-  const ultimoTxt = p.ultimoEstudio ? formatDate(p.ultimoEstudio) : "Sin estudios";
-  const ultimoColor = p.ultimoEstudio ? "var(--text)" : "var(--text-light)";
+function patientCard(p) {
+  const initial     = (p.nombre || "?")[0].toUpperCase();
+  const ultimoTxt   = p.ultimoEstudio ? formatDate(p.ultimoEstudio) : "Sin estudios";
+  const joinedTxt   = p.createdAt ? formatDate(p.createdAt) : "—";
 
-  // Serializar el objeto para pasarlo al modal de edición de forma segura
-  const pJson = escAttr(JSON.stringify(p));
+  const tags = [
+    p.edad  ? `${p.edad} años` : null,
+    p.sexo  || null,
+  ].filter(Boolean);
+
+  const condicionesTxt = [p.padecimientos, p.alergias]
+    .filter(Boolean)
+    .join(" · ")
+    || "Sin antecedentes registrados";
 
   return `
     <div
-      class="card-list"
+      class="pac-card"
       role="button"
       tabindex="0"
       aria-label="Ver paciente ${escHtml(p.nombre)}"
       onclick="goToPatient('${p.id}')"
       onkeydown="if(event.key==='Enter'||event.key===' ')goToPatient('${p.id}')"
-      style="border:1px solid var(--border)"
     >
-      <!-- Avatar -->
-      <div style="width:42px;height:42px;border-radius:50%;background:var(--crimson-100);
-                  display:flex;align-items:center;justify-content:center;
-                  color:var(--crimson);font-weight:700;font-size:15px;flex-shrink:0">
-        ${initial}
-      </div>
-
-      <!-- Nombre + meta -->
-      <div style="flex:1;min-width:0">
-        <div style="font-weight:600;font-size:var(--fs-body);color:var(--text);
-                    white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-          ${escHtml(p.nombre)}
-        </div>
-        <div style="font-size:var(--fs-sm);color:var(--text-light);margin-top:2px">
-          ${meta || "&nbsp;"}
+      <!-- Top: avatar + fecha de ingreso -->
+      <div class="pac-card-top">
+        <div class="pac-card-avatar">${initial}</div>
+        <div class="pac-card-joined">
+          Paciente desde
+          <span>${escHtml(joinedTxt)}</span>
         </div>
       </div>
 
-      <!-- Último estudio -->
-      <div style="text-align:right;flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;gap:3px">
-        <span style="font-size:var(--fs-xs);color:var(--text-light)">Último estudio</span>
-        <span style="font-size:var(--fs-sm);font-weight:500;color:${ultimoColor}">${ultimoTxt}</span>
-      </div>
+      <!-- Nombre -->
+      <div class="pac-card-name" title="${escHtml(p.nombre)}">${escHtml(p.nombre)}</div>
 
-      <!-- Acciones (no propagan click al row) -->
-      <div style="display:flex;align-items:center;gap:4px;flex-shrink:0" onclick="event.stopPropagation()">
-        <button
-          class="btn-icon"
-          aria-label="Editar ${escHtml(p.nombre)}"
-          title="Editar"
-          onclick="openEditModal('${p.id}')"
-        >
-          <i data-lucide="pencil" class="icon icon-md" aria-hidden="true"></i>
-        </button>
-        <button
-          class="btn-icon"
-          aria-label="Eliminar ${escHtml(p.nombre)}"
-          title="Eliminar"
-          style="color:var(--red)"
-          onclick="openDeleteModal('${p.id}','${escAttr(p.nombre)}')"
-        >
-          <i data-lucide="trash-2" class="icon icon-md" aria-hidden="true"></i>
-        </button>
-        <i data-lucide="chevron-right" class="icon icon-md" style="color:var(--text-light)" aria-hidden="true"></i>
+      <!-- Tags: edad / sexo -->
+      ${tags.length ? `
+        <div class="pac-card-meta">
+          ${tags.map(t => `<span class="pac-card-tag">${escHtml(t)}</span>`).join("")}
+        </div>` : ""}
+
+      <!-- Antecedentes clínicos -->
+      <div class="pac-card-conditions">${escHtml(condicionesTxt)}</div>
+
+      <div class="pac-card-divider"></div>
+
+      <!-- Bottom: último estudio + acciones -->
+      <div class="pac-card-bottom">
+        <div class="pac-card-last-study">
+          <span class="pac-card-last-study-label">Último estudio</span>
+          <span class="pac-card-last-study-value">${escHtml(ultimoTxt)}</span>
+        </div>
+        <div class="pac-card-actions" onclick="event.stopPropagation()">
+          <button
+            class="btn-icon"
+            aria-label="Editar ${escHtml(p.nombre)}"
+            title="Editar"
+            onclick="openEditModal('${p.id}')"
+          >
+            <i data-lucide="pencil" class="icon icon-sm" aria-hidden="true"></i>
+          </button>
+          <button
+            class="btn-icon"
+            aria-label="Eliminar ${escHtml(p.nombre)}"
+            title="Eliminar"
+            style="color:var(--red)"
+            onclick="openDeleteModal('${p.id}','${escAttr(p.nombre)}')"
+          >
+            <i data-lucide="trash-2" class="icon icon-sm" aria-hidden="true"></i>
+          </button>
+        </div>
       </div>
     </div>`;
 }
@@ -264,10 +277,17 @@ function openEditModal(id) {
 }
 
 function closeModal() {
-  state.modal   = null;
-  state.editing = null;
-  const el = document.getElementById("pac-modal");
-  if (el) el.innerHTML = "";
+  // Animación de salida antes de limpiar
+  const backdrop = document.getElementById("pac-sheet-backdrop");
+  const sheet    = document.getElementById("pac-sheet");
+  if (backdrop) backdrop.classList.add("closing");
+  if (sheet)    sheet.classList.add("closing");
+  setTimeout(() => {
+    state.modal   = null;
+    state.editing = null;
+    const el = document.getElementById("pac-modal");
+    if (el) el.innerHTML = "";
+  }, 320);
 }
 
 function renderFormModal() {
@@ -280,81 +300,76 @@ function renderFormModal() {
   if (!modalEl) return;
 
   modalEl.innerHTML = `
-    <div class="modal-overlay"
-         role="dialog" aria-modal="true" aria-labelledby="modal-title"
-         onclick="if(event.target===this)closeModal()">
-      <div class="modal-card">
+    <div id="pac-sheet-backdrop" class="sheet-backdrop"
+         onclick="if(event.target===this)closeModal()"
+         role="dialog" aria-modal="true" aria-labelledby="sheet-title">
 
-        <div class="modal-header">
+      <div id="pac-sheet" class="sheet">
+
+        <!-- Header -->
+        <div class="sheet-header">
           <div>
-            <h2 id="modal-title"
-                style="font-size:var(--fs-h2);font-family:var(--font-display);color:var(--text)">
-              ${title}
-            </h2>
+            <div id="sheet-title" class="sheet-header-title">${title}</div>
             ${isEdit
-              ? `<p style="font-size:var(--fs-sm);color:var(--text-light);margin-top:4px">${escHtml(p.nombre)}</p>`
-              : ""}
+              ? `<div class="sheet-header-sub">${escHtml(p.nombre)}</div>`
+              : `<div class="sheet-header-sub">Completa los datos del nuevo paciente</div>`}
           </div>
           <button class="btn-icon" aria-label="Cerrar" onclick="closeModal()">
             <i data-lucide="x" class="icon icon-md" aria-hidden="true"></i>
           </button>
         </div>
 
-        <div class="modal-body">
+        <!-- Body con scroll -->
+        <div class="sheet-body">
 
-          <!-- Error inline -->
           <div id="modal-error" style="display:none;margin-bottom:var(--space-4)"></div>
 
-          <!-- Datos básicos -->
           <p class="uppercase-label" style="margin-bottom:var(--space-4)">Datos básicos</p>
 
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 var(--space-4)">
+          <div class="form-field">
+            <label class="form-label" for="f-nombre">
+              Nombre completo <span style="color:var(--red)">*</span>
+            </label>
+            <input id="f-nombre" class="form-input" type="text"
+                   placeholder="Ej. María López Ruiz"
+                   value="${escHtml(p.nombre || "")}" />
+          </div>
 
-            <div class="form-field" style="grid-column:1/-1">
-              <label class="form-label" for="f-nombre">
-                Nombre completo <span style="color:var(--red)">*</span>
-              </label>
-              <input id="f-nombre" class="form-input" type="text"
-                     placeholder="Ej. María López Ruiz"
-                     value="${escHtml(p.nombre || "")}" />
-            </div>
-
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 var(--space-3)">
             <div class="form-field">
               <label class="form-label" for="f-edad">Edad</label>
               <input id="f-edad" class="form-input" type="number"
                      min="0" max="150" placeholder="45"
                      value="${p.edad ?? ""}" />
             </div>
-
             <div class="form-field">
               <label class="form-label" for="f-sexo">Sexo</label>
               <select id="f-sexo" class="form-select">
                 <option value="">Sin especificar</option>
-                <option value="Masculino"  ${p.sexo === "Masculino"  ? "selected" : ""}>Masculino</option>
-                <option value="Femenino"   ${p.sexo === "Femenino"   ? "selected" : ""}>Femenino</option>
-                <option value="Otro"       ${p.sexo === "Otro"       ? "selected" : ""}>Otro</option>
+                <option value="Masculino" ${p.sexo === "Masculino" ? "selected" : ""}>Masculino</option>
+                <option value="Femenino"  ${p.sexo === "Femenino"  ? "selected" : ""}>Femenino</option>
+                <option value="Otro"      ${p.sexo === "Otro"      ? "selected" : ""}>Otro</option>
               </select>
             </div>
+          </div>
 
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 var(--space-3)">
             <div class="form-field">
               <label class="form-label" for="f-tel">Teléfono</label>
               <input id="f-tel" class="form-input" type="tel"
                      placeholder="55 1234 5678"
                      value="${escHtml(p.telefono || "")}" />
             </div>
-
             <div class="form-field">
               <label class="form-label" for="f-email">Correo</label>
               <input id="f-email" class="form-input" type="email"
                      placeholder="paciente@email.com"
                      value="${escHtml(p.email || "")}" />
             </div>
-
           </div>
 
-          <div class="divider"></div>
+          <div class="divider" style="margin:var(--space-4) 0"></div>
 
-          <!-- Historial clínico -->
           <p class="uppercase-label" style="margin-bottom:var(--space-4)">Historial clínico</p>
 
           <div class="form-field">
@@ -383,7 +398,8 @@ function renderFormModal() {
 
         </div>
 
-        <div class="modal-footer">
+        <!-- Footer fijo -->
+        <div class="sheet-footer">
           <button class="btn-ghost" onclick="closeModal()">Cancelar</button>
           <button id="btn-save" class="btn-primary" onclick="handleSave()">
             ${btnTxt}
@@ -394,7 +410,7 @@ function renderFormModal() {
     </div>`;
 
   if (window.lucide) lucide.createIcons();
-  setTimeout(() => document.getElementById("f-nombre")?.focus(), 50);
+  setTimeout(() => document.getElementById("f-nombre")?.focus(), 80);
 }
 
 async function handleSave() {
