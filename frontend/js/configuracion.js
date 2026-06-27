@@ -20,6 +20,7 @@ async function initConfig() {
   attachProfileHandlers(me);
   attachPasswordHandlers();
   attachSessionHandlers();
+  attachExportHandlers();
   attachDeleteHandlers();
 }
 
@@ -427,12 +428,12 @@ function attachSessionHandlers() {
   });
 }
 
-<<<<<<< HEAD
 // ── Exportar ──────────────────────────────────────────────────────────────────
 
 function attachExportHandlers() {
-  document.getElementById("btn-export").addEventListener("click", async () => {
-    const btn = document.getElementById("btn-export");
+  const btn = document.getElementById("btn-export");
+  if (!btn) return;
+  btn.addEventListener("click", async () => {
     btn.disabled    = true;
     btn.textContent = "Generando…";
 
@@ -451,7 +452,7 @@ function attachExportHandlers() {
       a.href          = url;
       a.download      = `bioblood-export-${date}.zip`;
       a.style.display = "none";
-      document.body.appendChild(a);   // necesario para Firefox y Safari
+      document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -465,8 +466,6 @@ function attachExportHandlers() {
     }
   });
 }
-=======
->>>>>>> 00c9136e760f0c887cc734f21caece3542834310
 
 // ── Eliminar cuenta ───────────────────────────────────────────────────────────
 
