@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    { "source": "/pacientes", "destination": "/pacientes.html" },
+    { "source": "/paciente",  "destination": "/paciente.html"  },
+    { "source": "/configuracion", "destination": "/configuracion.html" },
+    { "source": "/dashboard", "destination": "/pacientes.html" }
+  ]
+}

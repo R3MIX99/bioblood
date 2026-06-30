@@ -1,11 +1,17 @@
-const Anthropic = require("@anthropic-ai/sdk");
+// ── PRODUCCIÓN (Claude): descomentar esto y eliminar el bloque GEMINI de abajo ──
+// const Anthropic = require("@anthropic-ai/sdk");
+// const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+// const MODEL  = "claude-sonnet-4-5";
+// ────────────────────────────────────────────────────────────────────────────────
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-const MODEL  = "claude-sonnet-4-5";
+// ── GEMINI (testing): eliminar este bloque al volver a Claude en producción ──────
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+const client = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// TODO: cambiar a "gemini-1.5-pro" (o superior) antes del deployment a producción
+const MODEL = "gemini-1.5-flash";
+// ────────────────────────────────────────────────────────────────────────────────
 
 // ── Helpers ────────────────────────────────────────────────────────────────
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**
  * Intenta parsear JSON posiblemente truncado cerrando arrays/objetos abiertos.
@@ -13,25 +19,39 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 function parseJsonSafe(text) {
   const clean = text.replace(/```json|```/g, "").trim();
 
-  // Intento 1: JSON completo
   try { return JSON.parse(clean); } catch (_) {}
 
-  // Intento 2: reparar JSON truncado
   try {
     let fixed = clean;
-    const lastCompleteObj    = fixed.lastIndexOf("},");
-    const lastCompleteObjEnd = fixed.lastIndexOf("}");
-    if (lastCompleteObj > 0 && lastCompleteObj > lastCompleteObjEnd - 5) {
-      fixed = fixed.slice(0, lastCompleteObj + 1);
+    fixed = fixed.replace(/,\s*$/, "").replace(/,\s*[\]}]*$/, "");
+
+    const lastBrace = fixed.lastIndexOf("}");
+    if (lastBrace > 0) {
+      const candidate = fixed.slice(0, lastBrace + 1);
+      const opens   = (candidate.match(/\{/g) || []).length;
+      const closes  = (candidate.match(/\}/g) || []).length;
+      const sqOpen  = (candidate.match(/\[/g) || []).length;
+      const sqClose = (candidate.match(/\]/g) || []).length;
+      let attempt   = candidate.replace(/,\s*$/, "");
+      for (let i = 0; i < sqOpen - sqClose; i++) attempt += "]";
+      for (let i = 0; i < opens  - closes;  i++) attempt += "}";
+      try { return JSON.parse(attempt); } catch (_) {}
     }
-    const openCurly  = (fixed.match(/\{/g) || []).length;
-    const closeCurly = (fixed.match(/\}/g) || []).length;
-    const openSquare = (fixed.match(/\[/g) || []).length;
-    const closeSquare= (fixed.match(/\]/g) || []).length;
-    fixed = fixed.replace(/,\s*$/, "");
-    for (let i = 0; i < openSquare - closeSquare; i++) fixed += "]";
-    for (let i = 0; i < openCurly  - closeCurly;  i++) fixed += "}";
-    return JSON.parse(fixed);
+
+    const lastCommaObj = fixed.lastIndexOf("},");
+    if (lastCommaObj > 0) {
+      let attempt   = fixed.slice(0, lastCommaObj + 1);
+      const opens   = (attempt.match(/\{/g) || []).length;
+      const closes  = (attempt.match(/\}/g) || []).length;
+      const sqOpen  = (attempt.match(/\[/g) || []).length;
+      const sqClose = (attempt.match(/\]/g) || []).length;
+      attempt = attempt.replace(/,\s*$/, "");
+      for (let i = 0; i < sqOpen - sqClose; i++) attempt += "]";
+      for (let i = 0; i < opens  - closes;  i++) attempt += "}";
+      try { return JSON.parse(attempt); } catch (_) {}
+    }
+
+    throw new Error("No se pudo reparar el JSON");
   } catch (e) {
     throw new Error(`JSON inválido en respuesta: ${clean.slice(0, 120)}`);
   }
@@ -39,93 +59,97 @@ function parseJsonSafe(text) {
 
 // ── parseBloodStudy ────────────────────────────────────────────────────────
 
-/**
- * Analiza un PDF de estudio de sangre y extrae sus componentes con categoría clínica.
- * @param {string} base64Pdf - PDF codificado en base64
- * @param {string} filename  - nombre del archivo (para contexto)
- * @returns {object} { isBloodStudy, date, patientName, labName, components } | { isBloodStudy: false, reason }
- */
 async function parseBloodStudy(base64Pdf, filename) {
   const today = new Date().toISOString().split("T")[0];
 
-  const msg = await client.messages.create({
-    model:      MODEL,
-    max_tokens: 4000,
-    messages: [{
-      role: "user",
-      content: [
-        {
-          type: "document",
-          source: { type: "base64", media_type: "application/pdf", data: base64Pdf },
-        },
-        {
-          type: "text",
-          text: `Analiza este PDF.
+  const prompt = `Analiza este PDF de laboratorio clínico.
 
-PRIMERO determina si es un estudio de sangre/laboratorio clínico con resultados numéricos de componentes sanguíneos.
+PASO 1 — ¿Es un estudio de sangre/laboratorio?
+Si NO lo es, responde ÚNICAMENTE: {"isBloodStudy": false, "reason": "descripción breve"}
 
-Si NO es un estudio de sangre, responde ÚNICAMENTE con este JSON:
-{"isBloodStudy": false, "reason": "descripción breve de qué es el documento"}
+PASO 2 — Identifica las SECCIONES del PDF.
+El PDF está dividido en secciones o paneles de prueba (ej: "Citometría Hemática", "Perfil Química 35 elementos", "Examen General de Orina"). Cada sección tiene un nombre que aparece como encabezado, título o en negritas/subrayado antes de sus componentes. Identifica todas las secciones presentes.
 
-Si SÍ es un estudio de sangre, extrae:
-1. La fecha del estudio (formato YYYY-MM-DD, si no hay fecha usa "${today}")
-2. Todos los componentes con valores numéricos, unidades, rangos de referencia y su categoría clínica
+PASO 3 — Para cada sección, normaliza su nombre a una categoría canónica:
+- Variantes de biometría hemática / citometría hemática / hematología / BHC / BCH / CBC / conteo sanguíneo → "Biometría Hemática"
+- Variantes de examen general de orina / urianálisis / urinalisis / EGO / análisis de orina → "Examen General de Orina"
+- Variantes de perfil lipídico / lípidos / panel lipídico → "Perfil Lipídico"
+- Variantes de perfil hepático / función hepática / enzimas hepáticas / pruebas hepáticas → "Perfil Hepático"
+- Variantes de perfil tiroideo / función tiroidea / hormonas tiroideas / TSH panel → "Perfil Tiroideo"
+- Variantes de electrolitos / panel de electrolitos (cuando es una sección EXCLUSIVA de electrolitos) → "Electrolitos"
+- Variantes de hemoglobina glucosilada / HbA1c / A1c / glucosilada → "Hemoglobina Glucosilada"
+- Paneles amplios de química: "perfil química X elementos", "química sanguínea", "panel metabólico", "panel bioquímico", "BMP", "CMP", "perfil metabólico completo" → "Química Sanguínea"
+- Variantes de coagulación / hemostasia / tiempo de protrombina / coagulograma / INR / TP / TPT → "Coagulación"
+- Variantes de marcadores tumorales / oncología / inmunología tumoral / antígenos tumorales / AFP / CA 125 / CEA / PSA → "Marcadores Tumorales"
+- Si no hay equivalencia clara → usa el nombre de la sección tal como aparece en el PDF, capitalizado correctamente
 
-Para el campo "category" de cada componente, usa EXACTAMENTE uno de estos valores:
-- "Biometría Hemática" — hemoglobina, hematocrito, eritrocitos, leucocitos, plaquetas, fórmula diferencial, etc.
-- "Química Sanguínea" — glucosa, urea, creatinina, ácido úrico, BUN, etc.
-- "Perfil Lipídico" — colesterol total, triglicéridos, HDL, LDL, VLDL, etc.
-- "Perfil Hepático" — TGO/AST, TGP/ALT, bilirrubinas, fosfatasa alcalina, GGT, etc.
-- "Perfil Tiroideo" — TSH, T3, T4, tiroxina, etc.
-- "Electrolitos" — sodio, potasio, cloro, calcio, magnesio, fósforo, etc.
-- "Hemoglobina Glucosilada" — HbA1c, hemoglobina glucosilada, fructosamina, etc.
-- "Examen General de Orina" — densidad urinaria, pH orina, glucosa en orina, proteínas en orina, sedimento, etc.
-- "Otros" — cualquier componente que no encaje en las categorías anteriores
+PASO 4 — Extrae TODOS los componentes de cada sección.
+REGLA CRÍTICA: Todos los componentes de una misma sección del PDF deben tener exactamente la misma "category". NO sub-categorices componentes dentro de una sección. Si el PDF agrupa glucosa, colesterol, sodio y bilirrubinas bajo "Perfil Química 35 elementos", todos van a "Química Sanguínea".
 
 Responde ÚNICAMENTE con JSON válido, sin texto adicional:
 {
   "isBloodStudy": true,
-  "date": "YYYY-MM-DD",
+  "date": "YYYY-MM-DD (si no hay fecha usa ${today})",
   "patientName": "nombre si aparece, o null",
   "labName": "nombre del laboratorio si aparece, o null",
   "components": [
     {
       "name": "nombre del componente",
-      "value": número_flotante,
-      "unit": "unidad",
+      "value": número_flotante_o_string_cualitativo,
+      "unit": "unidad tal como aparece en el PDF, o null si no hay unidad",
       "lowerLimit": número_o_null,
       "upperLimit": número_o_null,
+      "referenceText": "valor de referencia textual (ej: NEGATIVO, AMARILLO) o null si el rango es numérico",
       "status": "normal|bajo|alto|desconocido",
-      "category": "una de las categorías listadas arriba"
+      "category": "nombre canónico de la sección según PASO 3"
     }
   ]
-}`,
-        },
-      ],
-    }],
-  });
+}
 
-  const text = msg.content?.find((b) => b.type === "text")?.text || "";
+REGLAS adicionales:
+- Extrae TODOS los componentes sin excepción (incluyendo sedimento urinario, células, índices, razones, etc.)
+- "unit": la unidad exacta del PDF; null si no aparece unidad
+- Valores cualitativos (NEGATIVO, POSITIVO, ESCASAS, NO SE OBSERVAN, colores, etc.): "value" = texto del resultado, "unit" = unidad si aparece o null, "lowerLimit"/"upperLimit" = null, "referenceText" = valor esperado del PDF
+- Cuando el RESULTADO es un rango (ej: "0-3"): "value" = "0-3" como string, extraer lowerLimit/upperLimit de la columna de REFERENCIA del PDF
+- "status": normal si está en rango, bajo si está por debajo, alto si está por encima, desconocido si no se puede determinar`;
+
+  // ── PRODUCCIÓN (Claude): descomentar esto y eliminar el bloque GEMINI de abajo ──
+  // const msg = await client.messages.create({
+  //   model:      MODEL,
+  //   max_tokens: 8000,
+  //   messages: [{
+  //     role: "user",
+  //     content: [
+  //       { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64Pdf } },
+  //       { type: "text", text: prompt },
+  //     ],
+  //   }],
+  // });
+  // const text = msg.content?.find((b) => b.type === "text")?.text || "";
+  // ────────────────────────────────────────────────────────────────────────────────
+
+  // ── GEMINI (testing): eliminar este bloque al volver a Claude en producción ──────
+  const model = client.getGenerativeModel({
+    model: MODEL,
+    generationConfig: { maxOutputTokens: 8000 },
+  });
+  const result = await model.generateContent([
+    { inlineData: { mimeType: "application/pdf", data: base64Pdf } },
+    { text: prompt },
+  ]);
+  const text = result.response.text();
+  // ────────────────────────────────────────────────────────────────────────────────
+
   if (!text) throw new Error("La API no devolvió contenido de texto");
   return parseJsonSafe(text);
 }
 
 // ── buildCanonicalMap ──────────────────────────────────────────────────────
 
-/**
- * Agrupa nombres de componentes clínicamente equivalentes.
- * @param {string[]} names - lista de nombres únicos de componentes
- * @returns {Object} mapa { varianteOriginal: nombreCanónico }
- */
 async function buildCanonicalMap(names) {
   if (!names || names.length === 0) return {};
 
-  const msg = await client.messages.create({
-    model:      MODEL,
-    max_tokens: 2000,
-    messages: [{
-      role: "user",
-      content: `Eres un experto en nomenclatura de laboratorio clínico.
+  const prompt = `Eres un experto en nomenclatura de laboratorio clínico.
 
 Aquí hay una lista de nombres de componentes extraídos de estudios de sangre:
 ${names.map((n, i) => `${i + 1}. "${n}"`).join("\n")}
@@ -150,13 +174,27 @@ Responde ÚNICAMENTE con JSON válido, sin texto adicional:
   ]
 }
 
-IMPORTANTE: Incluye TODOS los nombres de la lista, incluso los que no tienen variantes (ponlos solos en su grupo).`,
-    }],
+IMPORTANTE: Incluye TODOS los nombres de la lista, incluso los que no tienen variantes (ponlos solos en su grupo).`;
+
+  // ── PRODUCCIÓN (Claude): descomentar esto y eliminar el bloque GEMINI de abajo ──
+  // const msg = await client.messages.create({
+  //   model:      MODEL,
+  //   max_tokens: 2000,
+  //   messages: [{ role: "user", content: prompt }],
+  // });
+  // const text = msg.content?.find((b) => b.type === "text")?.text || "";
+  // ────────────────────────────────────────────────────────────────────────────────
+
+  // ── GEMINI (testing): eliminar este bloque al volver a Claude en producción ──────
+  const model = client.getGenerativeModel({
+    model: MODEL,
+    generationConfig: { maxOutputTokens: 2000 },
   });
+  const result = await model.generateContent(prompt);
+  const text = result.response.text();
+  // ────────────────────────────────────────────────────────────────────────────────
 
-  const text = msg.content?.find((b) => b.type === "text")?.text || "";
   const clean = text.replace(/```json|```/g, "").trim();
-
   try {
     const parsed = JSON.parse(clean);
     const map = {};
@@ -173,60 +211,58 @@ IMPORTANTE: Incluye TODOS los nombres de la lista, incluso los que no tienen var
 
 // ── summarizeStudies ───────────────────────────────────────────────────────
 
-/**
- * Genera un resumen objetivo de uno o varios estudios de sangre.
- * @param {Array} studies - Array de { id, fecha, labName, components: [{name,value,unit,lowerLimit,upperLimit,status}] }
- * @returns {string} Resumen en texto/markdown
- */
 async function summarizeStudies(studies) {
   if (!studies || studies.length === 0) throw new Error("Sin estudios para resumir");
 
-  const studiesBlocks = studies.map((s) => {
-    const dateLabel = s.fecha    ? ` — ${s.fecha}` : "";
-    const labLabel  = s.labName  ? ` (${s.labName})` : "";
-    const header    = `Patient Study Results${dateLabel}${labLabel}`;
-
+  const blocks = studies.map(s => {
     const lines = (s.components || [])
       .filter(c => c.value != null && c.name)
       .map(c => {
-        const ref = (c.lowerLimit != null && c.upperLimit != null)
-          ? ` (ref: ${c.lowerLimit}–${c.upperLimit} ${c.unit ?? ""})`
-          : "";
-        const unit   = c.unit  ?? "";
-        const status = c.status && c.status !== "desconocido" ? ` [${c.status.toUpperCase()}]` : "";
-        return `- ${c.name}: ${c.value} ${unit}${ref}${status}`.trim();
+        const val  = c.value;
+        const unit = c.unit  ? ` ${c.unit}` : "";
+        const ref  = c.referenceText
+          ? ` [ref:${c.referenceText}]`
+          : (c.lowerLimit != null && c.upperLimit != null)
+            ? ` [ref:${c.lowerLimit}-${c.upperLimit}${unit}]`
+            : "";
+        const flag = c.status === "alto" ? "↑" : c.status === "bajo" ? "↓" : "";
+        return `${flag}${c.name}:${val}${unit}${ref}`;
       });
-
-    if (lines.length === 0) return null;
-    return `${header}\n${lines.join("\n")}`;
+    if (!lines.length) return null;
+    return `${s.fecha || "s/f"}\n${lines.join("\n")}`;
   }).filter(Boolean);
 
-  if (studiesBlocks.length === 0) throw new Error("Los estudios no contienen componentes con valores");
+  if (!blocks.length) throw new Error("Sin componentes con valores");
 
-  const structuredContext = studiesBlocks.join("\n\n");
+  const prompt = `Resultados de laboratorio (formato: [↑↓]nombre:valor unidad [ref:rango]):
 
-  const msg = await client.messages.create({
-    model:      MODEL,
-    max_tokens: 800,
-    messages: [{
-      role: "user",
-      content: `You are a clinical assistant summarizing a patient's lab study results.
-Below are the extracted and structured results from the study. Do NOT say data is missing — if a value is not present in the list, simply omit it from the summary.
+${blocks.join("\n\n")}
 
-${structuredContext}
+Responde SOLO con viñetas "•" en español. Reglas:
+- Señala valores ↑↓ con su valor y dirección.
+- Con varias fechas, indica tendencias (mejoró/empeoró/persiste).
+- Omite valores normales salvo que sean parte de un patrón relevante.
+- Sin introducción, conclusión ni encabezados.
+- Máximo 6 viñetas con los hallazgos más importantes.`;
 
-Respond in Spanish with a bullet-point list of the most relevant findings. Each bullet must be a single, factual statement. Rules:
-- Use "•" as the bullet character.
-- Flag values outside the reference range with their exact value and direction (↑ alto / ↓ bajo).
-- If there are multiple studies with dates, flag trends: values that improved, worsened, or stayed abnormal over time.
-- Only include normal values if they are part of a meaningful pattern.
-- Do not include an intro sentence, conclusion, or headings — only the bullet list.
-- Do not mention missing data.
-- Aim for 4–8 bullets covering only the most relevant facts.`,
-    }],
+  // ── PRODUCCIÓN (Claude): descomentar esto y eliminar el bloque GEMINI de abajo ──
+  // const msg = await client.messages.create({
+  //   model:      MODEL,
+  //   max_tokens: 500,
+  //   messages: [{ role: "user", content: prompt }],
+  // });
+  // const text = msg.content?.find((b) => b.type === "text")?.text || "";
+  // ────────────────────────────────────────────────────────────────────────────────
+
+  // ── GEMINI (testing): eliminar este bloque al volver a Claude en producción ──────
+  const model = client.getGenerativeModel({
+    model: MODEL,
+    generationConfig: { maxOutputTokens: 500 },
   });
+  const result = await model.generateContent(prompt);
+  const text = result.response.text();
+  // ────────────────────────────────────────────────────────────────────────────────
 
-  const text = msg.content?.find((b) => b.type === "text")?.text || "";
   if (!text) throw new Error("La API no devolvió contenido");
   return text;
 }

@@ -34,10 +34,10 @@ async function requireSession() {
     const doctor = await res.json();
     window.__doctor = doctor;
 
-    // Redirigir desde index.html o raíz hacia el dashboard
+    // Redirigir desde index.html o raíz hacia pacientes
     const path = window.location.pathname;
     if (path.endsWith("index.html") || path === "/" || path.endsWith("/app/")) {
-      window.location.replace("/dashboard");
+      window.location.replace("/pacientes");
     }
     return doctor;
   } catch {

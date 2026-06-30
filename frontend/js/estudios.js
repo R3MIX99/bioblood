@@ -27,6 +27,12 @@ const STUDY_PANELS = [
   { name: "Examen General de Orina", icon: "droplet",       color: "#0369A1",
     keywords: ["orina","urina","densidad urinaria","ph orina","glucosa orina","proteina orina",
                "sedimento","leucocitos orina","eritrocitos orina","nitritos","cetonas","urobilinogeno"] },
+  { name: "Coagulación",            icon: "timer",         color: "#7C3AED",
+    keywords: ["tiempo protrombina","tp","inr","tiempo tromboplastina","aptt","tpt","fibrinogeno",
+               "factor","coagulacion","trombina","hemostasia"] },
+  { name: "Marcadores Tumorales",   icon: "microscope",    color: "#BE185D",
+    keywords: ["alfafetoproteina","afp","ca 125","ca 19","ca 15","cea","psa","antigeno","marcador tumoral",
+               "beta hcg","bhcg","ca125","ca199"] },
 ];
 
 /**
@@ -34,13 +40,11 @@ const STUDY_PANELS = [
  * Prioriza comp.category (asignado por la IA), con fallback a keyword matching.
  */
 function classifyComponent(comp) {
-  // Usar la categoría asignada por la IA si es válida
-  if (comp.category) {
-    const valid = STUDY_PANELS.find(p => p.name === comp.category);
-    if (valid) return valid.name;
-  }
+  // La IA asigna la categoría basándose en la sección del PDF.
+  // Confiamos en ese valor; solo usamos fallback para estudios legacy sin category.
+  if (comp.category) return comp.category;
 
-  // Fallback: keyword matching sobre el nombre del componente
+  // Fallback solo para componentes sin category (estudios subidos antes de esta versión)
   const norm = (comp.name || "").toLowerCase()
     .normalize("NFD").replace(/[̀-ͯ]/g, "")
     .replace(/[^a-z0-9 ]/g, " ");
@@ -179,7 +183,7 @@ function renderComponentCards(study, container) {
                        letter-spacing:0.5px">Resultado</th>
             <th style="text-align:right;padding:10px 16px;font-size:var(--fs-xs);
                        font-weight:700;color:var(--text-muted);text-transform:uppercase;
-                       letter-spacing:0.5px">Rango de referencia</th>
+                       letter-spacing:0.5px">Valores de referencia</th>
           </tr>
         </thead>
         <tbody style="divide-y:var(--border)">
@@ -259,6 +263,9 @@ function buildPivotData(studies) {
 
   for (const study of sorted) {
     for (const comp of (study.components || [])) {
+      // Excluir cualitativos de la tabla comparativa (no se pueden comparar entre fechas)
+      const isNumeric = comp.value != null && !isNaN(Number(comp.value));
+      if (!isNumeric) continue;
       const norm  = localNormalize(comp.name);
       const unit  = comp.unit        ?? "";
       const lower = comp.lowerLimit  ?? null;
@@ -283,6 +290,7 @@ function buildPivotData(studies) {
   for (let si = 0; si < sorted.length; si++) {
     const study = sorted[si];
     for (const comp of (study.components || [])) {
+      if (comp.value == null || isNaN(Number(comp.value))) continue;
       const norm  = localNormalize(comp.name);
       const unit  = comp.unit       ?? "";
       const lower = comp.lowerLimit ?? null;
@@ -311,8 +319,93 @@ function renderPivotTable(studies, containerId) {
   const el = document.getElementById(containerId);
   if (!el) return;
 
-  if (!studies || studies.length < 2) {
-    el.innerHTML = "";
+  if (!studies || studies.length === 0) { el.innerHTML = ""; return; }
+
+  // Con un solo estudio: tabla simple de resultados (sin comparativa)
+  if (studies.length === 1) {
+    const s = studies[0];
+    const components = (s.components || []).filter(c => c.value != null && c.value !== "");
+    if (components.length === 0) { el.innerHTML = ""; return; }
+
+    const dot = (color, label) =>
+      `<span style="display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-xs);color:var(--text-muted)">
+        <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0"></span>${label}
+      </span>`;
+
+    const rows = components.map(c => {
+      const isNumeric = typeof c.value === "number" || (typeof c.value === "string" && c.value !== "" && !isNaN(Number(c.value)));
+      const status = (c.status || "nd").toLowerCase();
+      const cls = status === "alto" ? "pivot-cell-alto"
+        : status === "bajo"   ? "pivot-cell-bajo"
+        : status === "normal" ? "pivot-cell-normal"
+        : "pivot-cell-nd";
+      const rowCls = status === "alto" ? "row-status-high"
+        : status === "bajo" ? "row-status-low"
+        : status === "normal" ? "row-status-normal" : "";
+
+      const unitDisplay = c.unit ? escHtml(c.unit) : `<span style="color:var(--text-light)">NA</span>`;
+
+      // Columna de valores de referencia — mostrar límites siempre que existan
+      const hasLower = c.lowerLimit != null;
+      const hasUpper = c.upperLimit != null;
+      let refCell;
+      if (c.referenceText) {
+        refCell = `<td style="text-align:center;font-size:var(--fs-xs);color:var(--text-muted)">${escHtml(c.referenceText)}</td>`;
+      } else if (hasLower && hasUpper) {
+        refCell = `<td style="text-align:center;white-space:nowrap;font-size:var(--fs-xs);color:var(--text-muted)">
+          ${c.lowerLimit} – ${c.upperLimit} <span style="color:var(--text-light)">${escHtml(c.unit || "")}</span>
+        </td>`;
+      } else if (hasUpper) {
+        refCell = `<td style="text-align:center;white-space:nowrap;font-size:var(--fs-xs);color:var(--text-muted)">
+          &lt; ${c.upperLimit} <span style="color:var(--text-light)">${escHtml(c.unit || "")}</span>
+        </td>`;
+      } else if (hasLower) {
+        refCell = `<td style="text-align:center;white-space:nowrap;font-size:var(--fs-xs);color:var(--text-muted)">
+          &gt; ${c.lowerLimit} <span style="color:var(--text-light)">${escHtml(c.unit || "")}</span>
+        </td>`;
+      } else {
+        refCell = `<td style="text-align:center;color:var(--text-light);font-size:var(--fs-xs)">—</td>`;
+      }
+
+      return `<tr class="${rowCls}">
+        <td>${escHtml(c.name || "")}</td>
+        <td style="text-align:center;color:var(--text-muted)">${unitDisplay}</td>
+        <td style="text-align:center"><span class="${cls}">${c.value ?? "—"}</span></td>
+        ${refCell}
+      </tr>`;
+    }).join("");
+
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;
+                  gap:var(--space-3);margin-bottom:var(--space-4);flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:var(--space-3)">
+          <h2 style="font-family:var(--font-display);font-size:var(--fs-h2);color:var(--text)">
+            Resultados
+          </h2>
+          <span class="badge-count">${components.length} componentes</span>
+        </div>
+        <div style="display:flex;gap:var(--space-4);align-items:center;flex-wrap:wrap">
+          ${dot("var(--red)",   "Alto")}
+          ${dot("var(--amber)", "Bajo")}
+          ${dot("var(--green)", "Normal")}
+        </div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);
+                  border-radius:var(--radius-xl);overflow:hidden;box-shadow:var(--shadow-sm)">
+        <div class="table-container">
+          <table class="pivot-table">
+            <thead>
+              <tr>
+                <th style="text-align:left">Componente</th>
+                <th style="text-align:center">Unidad</th>
+                <th style="text-align:center">${s.fecha ? escHtml(formatDate(s.fecha)) : "Resultado"}</th>
+                <th style="text-align:center">Valores de referencia</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>`;
     return;
   }
 
@@ -428,7 +521,7 @@ function renderPivotTable(studies, containerId) {
               <th style="text-align:left">Componente</th>
               <th style="text-align:center">Unidad</th>
               ${dateHeaders}
-              <th style="text-align:center">Rango de referencia</th>
+              <th style="text-align:center">Valores de referencia</th>
             </tr>
           </thead>
           <tbody>${bodyRows}</tbody>
@@ -452,7 +545,7 @@ function downloadPivotCSV(containerId) {
       ? `"${s.replace(/"/g, '""')}"` : s;
   };
 
-  const labRow  = ["Componente", "Unidad", ...sorted.map(s => formatDate(s.fecha)), "Rango de referencia"];
+  const labRow  = ["Componente", "Unidad", ...sorted.map(s => formatDate(s.fecha)), "Valores de referencia"];
 
   const csvRows = [labRow];
 

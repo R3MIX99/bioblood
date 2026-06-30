@@ -55,7 +55,18 @@ router.post("/", requireAuth, async (req, res) => {
     parsed = await parseBloodStudy(pdfBase64, filename);
   } catch (err) {
     console.error("parseBloodStudy:", err.message);
-    return res.status(422).json({ error: "No se pudo analizar el PDF: " + err.message });
+    const msg = err.message || "";
+    const isQuota = msg.includes("credit balance") || msg.includes("too low") ||
+                    msg.includes("insufficient") || msg.includes("402") ||
+                    msg.includes("RESOURCE_EXHAUSTED") || msg.includes("quota") ||
+                    msg.includes("rateLimitExceeded") || err.status === 429 || err.status === 402;
+    if (isQuota) {
+      return res.status(402).json({
+        error: "Los créditos o cuota de IA se han agotado. Revisa tu cuenta en el proveedor de IA para continuar.",
+        code:  "INSUFFICIENT_CREDITS",
+      });
+    }
+    return res.status(422).json({ error: "No se pudo analizar el PDF: " + msg });
   }
 
   if (!parsed) {
@@ -87,29 +98,33 @@ router.post("/", requireAuth, async (req, res) => {
 });
 
 // ── POST /studies/summary ─────────────────────────────────────────────────────
-// Genera un resumen IA de todos los estudios de un paciente.
+// Genera un resumen IA de los componentes de una categoría específica.
+// El cliente envía `studiesData` (ya filtrado por categoría) para que la IA
+// resuma solo esos componentes, no todo el PDF.
 router.post("/summary", requireAuth, async (req, res) => {
-  const { patientId } = req.body;
+  const { patientId, studiesData } = req.body;
   if (!patientId) return res.status(400).json({ error: "patientId es requerido" });
 
   const patient = await getPatient(patientId, req.doctor.id);
   if (!patient) return res.status(404).json({ error: "Paciente no encontrado" });
 
   try {
-    const studies = await listStudies(patientId);
-    if (!studies || studies.length === 0) {
-      return res.status(422).json({ error: "El paciente no tiene estudios" });
+    let toSummarize = studiesData;
+
+    // Si el cliente no envía los datos filtrados, fallback a todos los estudios
+    if (!Array.isArray(toSummarize) || toSummarize.length === 0) {
+      const studies = await listStudies(patientId);
+      if (!studies || studies.length === 0) {
+        return res.status(422).json({ error: "El paciente no tiene estudios" });
+      }
+      toSummarize = studies.map(s => ({
+        id:         s.id,
+        fecha:      s.fecha,
+        components: s.components || [],
+      }));
     }
 
-    // listStudies ya devuelve components como array parseado (ver toStudy en airtable.js)
-    const studiesData = studies.map(s => ({
-      id:         s.id,
-      fecha:      s.fecha,
-      labName:    s.labName,
-      components: s.components || [],
-    }));
-
-    const summary = await summarizeStudies(studiesData);
+    const summary = await summarizeStudies(toSummarize);
     res.json({ summary });
   } catch (err) {
     console.error("POST /studies/summary:", err.message);

@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.27.3",
+    "@google/generative-ai": "^0.24.1",
     "airtable": "^0.12.2",
     "archiver": "^8.0.0",
     "bcrypt": "^5.1.1",

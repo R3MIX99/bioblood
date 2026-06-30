@@ -33,6 +33,8 @@ function renderGraficas(studies, containerId, patientName) {
 
   for (const study of sorted) {
     for (const comp of (study.components || [])) {
+      // No graficar valores cualitativos (texto como NEGATIVO, POSITIVO, etc.)
+      if (comp.value == null || isNaN(Number(comp.value))) continue;
       const norm  = localNormalize(comp.name);
       const unit  = comp.unit        ?? "";
       const lower = comp.lowerLimit  ?? null;
