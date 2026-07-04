@@ -56,13 +56,13 @@ router.post("/", requireAuth, async (req, res) => {
   } catch (err) {
     console.error("parseBloodStudy:", err.message);
     const msg = err.message || "";
+    console.error("parseBloodStudy error completo:", msg);
     const isQuota = msg.includes("credit balance") || msg.includes("too low") ||
-                    msg.includes("insufficient") || msg.includes("402") ||
-                    msg.includes("RESOURCE_EXHAUSTED") || msg.includes("quota") ||
-                    msg.includes("rateLimitExceeded") || err.status === 429 || err.status === 402;
+                    msg.includes("RESOURCE_EXHAUSTED") || msg.includes("rateLimitExceeded") ||
+                    err.status === 429 || err.status === 402;
     if (isQuota) {
       return res.status(402).json({
-        error: "Los créditos o cuota de IA se han agotado. Revisa tu cuenta en el proveedor de IA para continuar.",
+        error: "Los créditos o cuota de IA se han agotado. Recarga tu saldo en el proveedor de IA configurado para continuar.",
         code:  "INSUFFICIENT_CREDITS",
       });
     }

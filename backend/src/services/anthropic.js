@@ -7,8 +7,8 @@
 // ── GEMINI (testing): eliminar este bloque al volver a Claude en producción ──────
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const client = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-// TODO: cambiar a "gemini-1.5-pro" (o superior) antes del deployment a producción
-const MODEL = "gemini-1.5-flash";
+// TODO: cambiar a "gemini-2.0-flash" o "gemini-1.5-pro" antes del deployment a producción
+const MODEL = "gemini-2.0-flash";
 // ────────────────────────────────────────────────────────────────────────────────
 
 // ── Helpers ────────────────────────────────────────────────────────────────
