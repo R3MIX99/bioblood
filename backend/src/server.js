@@ -1,5 +1,9 @@
 require("dotenv").config();
 
+// Evita que errores no capturados tumben el proceso completo
+process.on("uncaughtException",  (err)    => console.error("💥 uncaughtException:",  err));
+process.on("unhandledRejection", (reason) => console.error("💥 unhandledRejection:", reason));
+
 const path         = require("path");
 const express      = require("express");
 const cors         = require("cors");
@@ -27,11 +31,18 @@ const app  = express();
 const PORT = process.env.PORT || 3000;
 
 // ── Middleware base ────────────────────────────────────────────────────────
-const localOriginRe = /^http:\/\/(localhost|127\.0\.0\.1|(192|10|172)\.\d{1,3}\.\d{1,3}\.\d{1,3})(:\d+)?$/;
+const localOriginRe  = /^http:\/\/(localhost|127\.0\.0\.1|(192|10|172)\.\d{1,3}\.\d{1,3}\.\d{1,3})(:\d+)?$/;
+const allowedOrigins = new Set(
+  (process.env.ALLOWED_ORIGINS || process.env.FRONTEND_URL || "")
+    .split(",")
+    .map(s => s.trim())
+    .filter(Boolean)
+);
 app.use(cors({
   origin: (origin, cb) => {
     if (!origin || localOriginRe.test(origin)) return cb(null, true);
     if (!isProd) return cb(null, true);
+    if (allowedOrigins.has(origin))           return cb(null, true);
     cb(new Error(`CORS: origen no permitido — ${origin}`));
   },
   credentials: true,

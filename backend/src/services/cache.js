@@ -1,37 +1,33 @@
-/* BioBlood — Cache en memoria con TTL */
+/* BioBlood — Cache con Redis + TTL
+   Drop-in replacement del cache en memoria anterior.
+   API idéntica: withCache, invalidate, invalidatePrefix */
 
-const _store = new Map(); // key → { value, expiresAt }
+const redis  = require("./redis");
+const PREFIX = "bb:cache:";
 
-/**
- * Devuelve el valor cacheado si sigue vigente;
- * si no, llama a fn(), guarda el resultado y lo devuelve.
- * @param {string}   key    - Clave única (incluye doctorId y params relevantes)
- * @param {number}   ttlMs  - Tiempo de vida en milisegundos
- * @param {Function} fn     - Función async que produce el valor
- */
 async function withCache(key, ttlMs, fn) {
-  const now = Date.now();
-  const hit = _store.get(key);
-  if (hit && now < hit.expiresAt) return hit.value;
-  const value = await fn();
-  _store.set(key, { value, expiresAt: now + ttlMs });
+  const rkey = PREFIX + key;
+  const hit  = await redis.get(rkey);
+  if (hit) return JSON.parse(hit);
+
+  const value  = await fn();
+  const ttlSec = Math.max(1, Math.ceil(ttlMs / 1000));
+  await redis.setex(rkey, ttlSec, JSON.stringify(value));
   return value;
 }
 
-/**
- * Invalida una entrada del cache por clave exacta.
- */
-function invalidate(key) {
-  _store.delete(key);
+async function invalidate(key) {
+  await redis.del(PREFIX + key);
 }
 
-/**
- * Invalida todas las entradas cuya clave empieza con el prefijo.
- */
-function invalidatePrefix(prefix) {
-  for (const key of _store.keys()) {
-    if (key.startsWith(prefix)) _store.delete(key);
-  }
+async function invalidatePrefix(prefix) {
+  const fullPrefix = PREFIX + prefix;
+  let cursor = "0";
+  do {
+    const [next, keys] = await redis.scan(cursor, "MATCH", `${fullPrefix}*`, "COUNT", 100);
+    if (keys.length) await redis.del(...keys);
+    cursor = next;
+  } while (cursor !== "0");
 }
 
 module.exports = { withCache, invalidate, invalidatePrefix };

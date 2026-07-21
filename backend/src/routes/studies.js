@@ -66,7 +66,7 @@ router.post("/", requireAuth, async (req, res) => {
         code:  "INSUFFICIENT_CREDITS",
       });
     }
-    return res.status(422).json({ error: "No se pudo analizar el PDF: " + msg });
+    return res.status(422).json({ error: "No se pudo analizar el PDF. Verifica que sea un estudio de sangre válido." });
   }
 
   if (!parsed) {
@@ -93,7 +93,7 @@ router.post("/", requireAuth, async (req, res) => {
     res.status(201).json(study);
   } catch (err) {
     console.error("POST /studies createStudy:", err.message);
-    res.status(500).json({ error: err.message || "Error al guardar el estudio" });
+    res.status(500).json({ error: "Error al guardar el estudio" });
   }
 });
 
@@ -147,7 +147,7 @@ router.delete("/:id", requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error("DELETE /studies/:id:", err.message);
-    res.status(500).json({ error: err.message || "Error al eliminar el estudio" });
+    res.status(500).json({ error: "Error al eliminar el estudio" });
   }
 });
 

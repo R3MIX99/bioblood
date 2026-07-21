@@ -29,4 +29,23 @@ async function sendResetCode(toEmail, code) {
   });
 }
 
-module.exports = { sendResetCode };
+async function sendVerificationCode(toEmail, code) {
+  await transporter.sendMail({
+    from:    `"BioBlood" <${process.env.SMTP_USER}>`,
+    to:      toEmail,
+    subject: "Verifica tu correo — BioBlood",
+    text:    `Tu código de verificación es: ${code}\n\nVálido por 15 minutos. Si no creaste una cuenta en BioBlood, ignora este mensaje.`,
+    html: `
+      <div style="font-family:sans-serif;max-width:480px;margin:auto;padding:32px">
+        <h2 style="color:#C0392B;margin-bottom:8px">BioBlood</h2>
+        <p style="color:#555;margin-bottom:24px">Usa este código para verificar tu correo y activar tu cuenta:</p>
+        <div style="font-size:36px;font-weight:700;letter-spacing:8px;color:#111;
+                    background:#f5f5f5;border-radius:8px;padding:16px 24px;
+                    text-align:center;margin-bottom:24px">${code}</div>
+        <p style="color:#888;font-size:13px">Válido por 15 minutos.<br>
+        Si no creaste una cuenta en BioBlood, puedes ignorar este correo.</p>
+      </div>`,
+  });
+}
+
+module.exports = { sendResetCode, sendVerificationCode };

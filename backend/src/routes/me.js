@@ -3,7 +3,7 @@
 const path    = require("path");
 const fs      = require("fs");
 const router  = require("express").Router();
-const bcrypt  = require("bcrypt");
+const bcrypt  = require("bcryptjs");
 const jwt     = require("jsonwebtoken");
 const multer  = require("multer");
 const { ZipArchive } = require("archiver");

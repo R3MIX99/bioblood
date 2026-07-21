@@ -11,6 +11,11 @@ const ESTUDIOS  = process.env.AIRTABLE_ESTUDIOS_TABLE;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
+/** Escapa caracteres especiales para usar valores en filterByFormula de Airtable. */
+function escAT(str) {
+  return String(str ?? "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
 /** Convierte un record de Airtable en un objeto plano. */
 function toDoctor(rec) {
   if (!rec) return null;
@@ -85,7 +90,7 @@ function toStudy(rec) {
 async function findDoctorByEmail(email) {
   try {
     const records = await base(DOCTORES)
-      .select({ filterByFormula: `{email} = "${email}"`, maxRecords: 1 })
+      .select({ filterByFormula: `{email} = "${escAT(email)}"`, maxRecords: 1 })
       .firstPage();
     return toDoctor(records[0] || null);
   } catch (e) {
@@ -97,7 +102,7 @@ async function findDoctorByEmail(email) {
 async function findDoctorByGoogleId(googleId) {
   try {
     const records = await base(DOCTORES)
-      .select({ filterByFormula: `{googleId} = "${googleId}"`, maxRecords: 1 })
+      .select({ filterByFormula: `{googleId} = "${escAT(googleId)}"`, maxRecords: 1 })
       .firstPage();
     return toDoctor(records[0] || null);
   } catch (e) {

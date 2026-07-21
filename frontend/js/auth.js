@@ -18,11 +18,13 @@ function resolveReturnTo() {
 
 // ── Estado ────────────────────────────────────────────────────────────────
 let activeTab    = "login"; // "login" | "register"
-let activeScreen = "auth";  // "auth" | "forgot-email" | "forgot-code" | "forgot-reset"
+let activeScreen = "auth";  // "auth" | "forgot-email" | "forgot-code" | "forgot-reset" | "verify-email"
 let forgotEmail  = "";      // persisted across forgot screens
+let verifyEmail  = "";      // correo pendiente de verificación al registrarse
 
 // ── Render ────────────────────────────────────────────────────────────────
 function render() {
+  if (activeScreen === "verify-email") { renderVerifyEmail(); return; }
   if (activeScreen !== "auth") { renderForgot(); return; }
 
   const root = document.getElementById("login-root");
@@ -316,6 +318,14 @@ async function handleSubmit(e) {
       return;
     }
 
+    // Registro pendiente — ir a verificación de correo
+    if (data.pending) {
+      verifyEmail  = email;
+      activeScreen = "verify-email";
+      render();
+      return;
+    }
+
     // Éxito — redirigir
     window.location.replace(resolveReturnTo());
   } catch {
@@ -326,6 +336,156 @@ async function handleSubmit(e) {
 
 function loginWithGoogle() {
   window.location.href = `${API_URL}/auth/google`;
+}
+
+// ── Verificación de correo (registro) ────────────────────────────────────
+
+function renderVerifyEmail() {
+  const root = document.getElementById("login-root");
+  if (!root) return;
+
+  const logoHtml = `
+    <div class="auth-logo">
+      <div class="auth-logo-icon">
+        <i data-lucide="droplet" class="icon" style="width:28px;height:28px;color:#C0392B;stroke-width:1.75"></i>
+      </div>
+      <div>
+        <h1 class="auth-brand">BioBlood</h1>
+        <p class="auth-brand-sub">ANÁLISIS CLÍNICOS</p>
+      </div>
+    </div>`;
+
+  root.innerHTML = `
+    <div class="auth-wrapper">
+      <div class="auth-card">
+        ${logoHtml}
+        <div style="text-align:center;margin-bottom:var(--space-5)">
+          <div style="width:56px;height:56px;background:var(--crimson-50);border-radius:50%;
+                      display:inline-flex;align-items:center;justify-content:center;margin-bottom:var(--space-4)">
+            <i data-lucide="mail" style="width:26px;height:26px;color:var(--crimson);stroke-width:1.75"></i>
+          </div>
+          <h2 style="font-size:var(--fs-h2);font-family:var(--font-display);color:var(--text);margin:0 0 var(--space-2)">
+            Verifica tu correo
+          </h2>
+          <p style="font-size:var(--fs-sm);color:var(--text-muted);margin:0">
+            Enviamos un código de 6 dígitos a<br><strong>${verifyEmail}</strong>
+          </p>
+        </div>
+
+        <div id="auth-error" class="auth-error" style="display:none"></div>
+
+        <form onsubmit="handleVerifyEmail(event)">
+          <div class="auth-field">
+            <label class="auth-label">Código de verificación</label>
+            <input type="text" id="verify-code-input" class="auth-input"
+                   placeholder="000000" required maxlength="6"
+                   style="letter-spacing:6px;font-size:22px;text-align:center"
+                   autocomplete="one-time-code" inputmode="numeric" />
+          </div>
+          <button type="submit" class="auth-btn-primary" id="auth-submit">
+            <span id="auth-submit-text">Verificar y crear cuenta</span>
+            <i data-lucide="loader-2" class="icon spin" id="auth-spinner" style="display:none;width:16px;height:16px"></i>
+          </button>
+        </form>
+
+        <div style="text-align:center;margin-top:var(--space-4);display:flex;flex-direction:column;gap:var(--space-2)">
+          <button type="button" onclick="handleResendVerification()"
+            style="background:none;border:none;cursor:pointer;font-size:var(--fs-sm);
+                   color:var(--text-muted);text-decoration:underline;padding:0">
+            Reenviar código
+          </button>
+          <button type="button" onclick="backToRegister()"
+            style="background:none;border:none;cursor:pointer;font-size:var(--fs-sm);
+                   color:var(--text-light);padding:0">
+            Volver al registro
+          </button>
+        </div>
+      </div>
+    </div>`;
+
+  if (window.lucide) lucide.createIcons();
+  setTimeout(() => { const f = document.getElementById("verify-code-input"); if (f) f.focus(); }, 50);
+}
+
+async function handleVerifyEmail(e) {
+  e.preventDefault();
+  clearError();
+  const code = document.getElementById("verify-code-input")?.value.trim();
+  if (!code) return;
+
+  setLoading(true);
+  try {
+    const res  = await apiFetch("/auth/verify-email", {
+      method: "POST",
+      body:   JSON.stringify({ email: verifyEmail, code }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      // Si el código expiró o demasiados intentos → regresar al registro
+      if (data.reason === "expired" || data.reason === "locked") {
+        activeScreen = "auth";
+        activeTab    = "register";
+        render();
+        setTimeout(() => showError(data.error), 50);
+      } else {
+        showError(data.error || "Código incorrecto");
+      }
+      setLoading(false);
+      return;
+    }
+
+    window.location.replace(resolveReturnTo());
+  } catch {
+    showError("Error de conexión.");
+    setLoading(false);
+  }
+}
+
+async function handleResendVerification() {
+  clearError();
+  setLoading(true);
+  try {
+    const res  = await apiFetch("/auth/resend-verification", {
+      method: "POST",
+      body:   JSON.stringify({ email: verifyEmail }),
+    });
+    const data = await res.json();
+    setLoading(false);
+    if (!res.ok) {
+      if (data.error?.includes("pendiente")) {
+        // No hay registro pendiente — regresar al registro
+        activeScreen = "auth";
+        activeTab    = "register";
+        render();
+        setTimeout(() => showError("El código expiró. Por favor regístrate de nuevo."), 50);
+      } else {
+        showError(data.error || "Error al reenviar el código");
+      }
+      return;
+    }
+    showVerifySuccess("Código reenviado. Revisa tu bandeja de entrada.");
+  } catch {
+    showError("Error de conexión.");
+    setLoading(false);
+  }
+}
+
+function showVerifySuccess(msg) {
+  const el = document.getElementById("auth-error");
+  if (!el) return;
+  el.textContent       = msg;
+  el.style.display     = "block";
+  el.style.background  = "var(--green-50, #f0fdf4)";
+  el.style.borderColor = "var(--green, #27ae60)";
+  el.style.color       = "var(--green, #27ae60)";
+}
+
+function backToRegister() {
+  activeScreen = "auth";
+  activeTab    = "register";
+  verifyEmail  = "";
+  render();
 }
 
 // ── Forgot password ───────────────────────────────────────────────────────
